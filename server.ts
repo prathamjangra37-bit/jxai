@@ -11,6 +11,17 @@ const PORT = 3000;
 
 app.use(express.json());
 
+// Enable proper CORS support for all endpoints
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Initialize Gemini client lazy/securely
 let ai: GoogleGenAI | null = null;
 
@@ -159,7 +170,13 @@ app.post("/api/chat", async (req, res) => {
    - यदि यूजर किसी विषय को सीखना या समझना चाहे, तो उसे शुरुआत (Beginner) से लेकर एडवांस लेवल (Advanced Level) तक का एक शानदार रोडमैप (Roadmap) बनाकर समझाओ।
 5. सामान्य सहायता: टेक्नोलॉजी, पढ़ाई, डेली लाइफ, बिज़नेस और जनरल नॉलेज से जुड़े हर सवाल में पूरी मदद करो।`;
 
-    const response = await client.models.generateContent({
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    });
+
+    const responseStream = await client.models.generateContentStream({
       model: "gemini-3.5-flash",
       contents: contents,
       config: {
@@ -168,79 +185,30 @@ app.post("/api/chat", async (req, res) => {
       },
     });
 
-    const reply = response.text || "भाई, लगता है कुछ गड़बड़ हो गई। दोबारा कोशिश कर ले!";
-    res.json({ reply });
+    for await (const chunk of responseStream) {
+      const text = chunk.text || "";
+      res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    res.status(500).json({ 
-      error: error.message || "Ram Ram Bhai! Platform pe kuch takleef aayi hai. Kripya dubaara koshish karein." 
-    });
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: error.message || "Ram Ram Bhai! Kuch takleef aayi hai." })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ 
+        error: error.message || "Ram Ram Bhai! Platform pe kuch takleef aayi hai. Kripya dubaara koshish karein." 
+      });
+    }
   }
 });
 
-// API endpoint for Image Generation
+// API endpoint for Image Generation (Disabled in free version)
 app.post("/api/generate-image", async (req, res) => {
-  try {
-    const { prompt, aspectRatio } = req.body;
-    
-    if (!prompt || !prompt.trim()) {
-      return res.status(400).json({ error: "Prompt is required." });
-    }
-
-    const client = getGeminiClient();
-
-    const response = await client.models.generateContent({
-      model: "gemini-3.1-flash-lite-image",
-      contents: {
-        parts: [
-          {
-            text: prompt,
-          },
-        ],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: aspectRatio || "1:1",
-        },
-      },
-    });
-
-    let imageUrl = "";
-    if (response.candidates && response.candidates[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          const base64EncodeString = part.inlineData.data;
-          imageUrl = `data:image/png;base64,${base64EncodeString}`;
-          break;
-        }
-      }
-    }
-
-    if (!imageUrl) {
-      const textResponse = response.text;
-      if (textResponse) {
-        throw new Error(`Image generation unavailable: ${textResponse}`);
-      }
-      throw new Error("No image was generated. Please try a different prompt.");
-    }
-
-    res.json({ imageUrl });
-  } catch (error: any) {
-    console.error("Gemini Image Generation Error:", error);
-    // Graceful check for unpaid API keys or unsupported models
-    const isModelUnsupported = error.message?.toLowerCase().includes("not found") || 
-                               error.message?.toLowerCase().includes("unsupported") || 
-                               error.message?.toLowerCase().includes("billing") || 
-                               error.message?.toLowerCase().includes("quota") || 
-                               error.message?.toLowerCase().includes("key") ||
-                               error.message?.toLowerCase().includes("paid");
-                               
-    const errMsg = isModelUnsupported 
-      ? "Image generation is currently unavailable because the selected model requires a paid Gemini API key. Please configure a paid key in Settings > Secrets or check with your platform provider."
-      : (error.message || "Failed to generate image. Please try again.");
-      
-    res.status(500).json({ error: errMsg });
-  }
+  return res.status(403).json({
+    error: "Image generation requires a supported paid Gemini API key. For the free version, please stick to text-based and image analysis requests which are fully active."
+  });
 });
 
 // Store temporary media in a memory map so we can reference them with a stable real URL
@@ -311,9 +279,26 @@ app.get("/api/media/:id", (req, res) => {
   }
 });
 
+// Catch-all handler for unhandled /api/* routes to guarantee they return JSON and never HTML
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ 
+    error: `API route not found: ${req.method} ${req.originalUrl}` 
+  });
+});
+
+// Global Error Handler to guarantee every server error is returned as JSON and never HTML
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("Global Server Error:", err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: err.message || "An unexpected error occurred on the server."
+  });
+});
+
 // Setup Vite middleware for development, serve static files for production
 async function setupApp() {
-  const isProd = process.env.NODE_ENV === "production" || __filename.endsWith("server.cjs") || __dirname.includes("dist");
+  const isProd = process.env.NODE_ENV === "production" || 
+                 (typeof __filename !== "undefined" && __filename.endsWith("server.cjs"));
 
   if (!isProd) {
     const vite = await createViteServer({
@@ -323,7 +308,7 @@ async function setupApp() {
     app.use(vite.middlewares);
   } else {
     // In production, the bundled server.cjs resides inside dist/ along with static assets
-    const distPath = __dirname.includes("dist") ? __dirname : path.join(process.cwd(), "dist");
+    const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));

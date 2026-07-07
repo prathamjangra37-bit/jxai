@@ -3,10 +3,95 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>UDGTP Guidance Platform</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Minimalist Glowing Splash Screen -->
+      <style>
+        body {
+          margin: 0;
+          background-color: #000000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          height: 100vh;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          color: #ffffff;
+          overflow: hidden;
+        }
+        .splash-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          animation: fadeIn 0.8s ease-out forwards;
+        }
+        .splash-logo {
+          width: 96px;
+          height: 96px;
+          border-radius: 50%;
+          background-color: #000000;
+          border: 1px solid #27272a; /* border-zinc-800 */
+          color: #ffffff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: bold;
+          font-size: 48px;
+          box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 40px rgba(255, 255, 255, 0.05); /* Blue glowing splash accent */
+          margin-bottom: 24px;
+          animation: pulseGlow 2s infinite ease-in-out;
+        }
+        .splash-title {
+          font-size: 20px;
+          font-weight: 700;
+          letter-spacing: -0.025em;
+          margin: 0 0 8px 0;
+          color: #f4f4f5;
+        }
+        .splash-subtitle {
+          font-size: 11px;
+          color: #a1a1aa;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          margin: 0 0 32px 0;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .splash-spinner {
+          width: 24px;
+          height: 24px;
+          border: 2px solid rgba(255, 255, 255, 0.1);
+          border-top-color: #3b82f6; /* Tailwind blue-500 */
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: scale(0.95); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 40px rgba(255, 255, 255, 0.05); }
+          50% { box-shadow: 0 0 32px rgba(59, 130, 246, 0.35), 0 0 60px rgba(255, 255, 255, 0.1); }
+        }
+      </style>
+      <div class="splash-container">
+        <div class="splash-logo">U</div>
+        <h1 class="splash-title">UDGTP</h1>
+        <div class="splash-subtitle">Ultra-Dynamic Guidance Text Platform</div>
+        <div class="splash-spinner"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

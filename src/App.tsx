@@ -33,16 +33,20 @@ import {
   Paperclip,
   Image as ImageIcon,
   FileText,
-  Download
+  Download,
+  Wifi,
+  WifiOff,
+  HelpCircle
 } from "lucide-react";
 import { SUGGESTIONS, PRINCIPLES } from "./data";
 import { Message, Conversation, Attachment } from "./types";
 import { MarkdownView } from "./components/MarkdownView";
+import { TypewriterView } from "./components/TypewriterView";
 import { motion, AnimatePresence } from "motion/react";
 
 export default function App() {
-  // Navigation / Tabs: "chat" | "profile" | "settings"
-  const [activeTab, setActiveTab] = useState<"chat" | "profile" | "settings">("chat");
+  // Navigation / Tabs: "chat" | "profile" | "settings" | "help"
+  const [activeTab, setActiveTab] = useState<"chat" | "profile" | "settings" | "help">("chat");
 
   // Multi-session State
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -86,6 +90,14 @@ export default function App() {
   // Image Generation States
   const [isGenerateImageMode, setIsGenerateImageMode] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState<"1:1" | "16:9" | "4:3" | "9:16">("1:1");
+  const [showImagePremiumModal, setShowImagePremiumModal] = useState(false);
+
+  // PWA Install States
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  // Online / Offline State
+  const [isOnline, setIsOnline] = useState<boolean>(typeof window !== "undefined" ? window.navigator.onLine : true);
 
   // References
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -202,6 +214,57 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  // PWA Install Event Listeners
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      console.log("UDGTP can now be installed on this device!");
+    };
+
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setIsInstalled(true);
+      handleShowNotification("UDGTP has been successfully installed on your device!");
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    window.addEventListener("appinstalled", handleAppInstalled);
+
+    // Initial display mode check
+    if (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone) {
+      setIsInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
+    };
+  }, []);
+
+  // Sync online / offline events
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      handleShowNotification("You are back online. Chatting resumed!");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      handleShowNotification("You are offline. Connect to the internet to continue chatting.");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    // Sync on mount
+    setIsOnline(navigator.onLine);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   // Sync conversations to LocalStorage when changed
   useEffect(() => {
     if (conversations.length > 0) {
@@ -212,8 +275,8 @@ export default function App() {
     scrollToBottom();
   }, [conversations]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
   // Switch to or retrieve current conversation messages
@@ -234,6 +297,21 @@ export default function App() {
     setTimeout(() => {
       setNotification((curr) => (curr === text ? null : curr));
     }, 3500);
+  };
+
+  const handleInstallApp = async () => {
+    if (!deferredPrompt) {
+      handleShowNotification("To install: use your browser's share or menu options and select 'Add to Home Screen' / 'Install'.");
+      return;
+    }
+    try {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      console.log(`UDGTP Install prompt outcome: ${outcome}`);
+      setDeferredPrompt(null);
+    } catch (err) {
+      console.error("UDGTP Install prompt error:", err);
+    }
   };
 
   // Create a brand new empty chat session
@@ -591,6 +669,23 @@ export default function App() {
           payload[lastIndex].content += ` [User Preference: Respond nicely keeping settings language in mind: ${language}]`;
         }
 
+        // Pre-insert an empty model message so typewriter can display loader & stream instantly
+        const modelMsgId = Math.random().toString(36).substring(7);
+        const initialModelMsg: Message = {
+          id: modelMsgId,
+          role: "model",
+          content: "",
+          timestamp: new Date()
+        };
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === currentId
+              ? { ...c, messages: [...newMessagesList, initialModelMsg] }
+              : c
+          )
+        );
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -603,22 +698,64 @@ export default function App() {
           throw new Error(errData.error || "The server failed to respond. Please try again.");
         }
 
-        const data = await res.json();
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder("utf-8");
+        if (!reader) {
+          throw new Error("Response stream is not available.");
+        }
 
-        const modelMsg: Message = {
-          id: Math.random().toString(36).substring(7),
-          role: "model",
-          content: data.reply,
-          timestamp: new Date()
-        };
+        let replyContent = "";
+        let buffer = "";
 
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === currentId
-              ? { ...c, messages: [...newMessagesList, modelMsg] }
-              : c
-          )
-        );
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // Keep partial line in buffer
+
+          for (const line of lines) {
+            const cleaned = line.trim();
+            if (!cleaned) continue;
+
+            if (cleaned.startsWith("data: ")) {
+              const dataStr = cleaned.substring(6);
+              if (dataStr === "[DONE]") {
+                break;
+              }
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.error) {
+                  throw new Error(parsed.error);
+                }
+                if (parsed.text) {
+                  replyContent += parsed.text;
+                  
+                  // Update message in-place
+                  setConversations((prev) =>
+                    prev.map((c) =>
+                      c.id === currentId
+                        ? {
+                            ...c,
+                            messages: c.messages.map((m) =>
+                              m.id === modelMsgId
+                                ? { ...m, content: replyContent }
+                                : m
+                            )
+                          }
+                        : c
+                    )
+                  );
+                }
+              } catch (e: any) {
+                if (e.message && e.message.includes("Ram Ram")) {
+                  throw e;
+                }
+              }
+            }
+          }
+        }
       }
     } catch (err: any) {
       if (err.name === "AbortError") {
@@ -714,6 +851,21 @@ export default function App() {
           payload[lastIndex].content += ` [User Preference: Respond nicely in ${language}]`;
         }
 
+        // Pre-insert empty model message
+        const modelMsgId = Math.random().toString(36).substring(7);
+        const initialModelMsg: Message = {
+          id: modelMsgId,
+          role: "model",
+          content: "",
+          timestamp: new Date()
+        };
+
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === activeId ? { ...c, messages: [...workingMessages, initialModelMsg] } : c
+          )
+        );
+
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -726,20 +878,64 @@ export default function App() {
           throw new Error(errData.error || "The server failed to respond.");
         }
 
-        const data = await res.json();
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder("utf-8");
+        if (!reader) {
+          throw new Error("Response stream is not available.");
+        }
 
-        const modelMsg: Message = {
-          id: Math.random().toString(36).substring(7),
-          role: "model",
-          content: data.reply,
-          timestamp: new Date()
-        };
+        let replyContent = "";
+        let buffer = "";
 
-        setConversations((prev) =>
-          prev.map((c) =>
-            c.id === activeId ? { ...c, messages: [...workingMessages, modelMsg] } : c
-          )
-        );
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // Keep partial line in buffer
+
+          for (const line of lines) {
+            const cleaned = line.trim();
+            if (!cleaned) continue;
+
+            if (cleaned.startsWith("data: ")) {
+              const dataStr = cleaned.substring(6);
+              if (dataStr === "[DONE]") {
+                break;
+              }
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.error) {
+                  throw new Error(parsed.error);
+                }
+                if (parsed.text) {
+                  replyContent += parsed.text;
+                  
+                  // Update message in-place
+                  setConversations((prev) =>
+                    prev.map((c) =>
+                      c.id === activeId
+                        ? {
+                            ...c,
+                            messages: c.messages.map((m) =>
+                              m.id === modelMsgId
+                                ? { ...m, content: replyContent }
+                                : m
+                            )
+                          }
+                        : c
+                    )
+                  );
+                }
+              } catch (e: any) {
+                if (e.message && e.message.includes("Ram Ram")) {
+                  throw e;
+                }
+              }
+            }
+          }
+        }
       }
       handleShowNotification("Response regenerated successfully.");
     } catch (err: any) {
@@ -930,6 +1126,22 @@ export default function App() {
           </button>
         </div>
 
+        {/* PWA Install Banner in Sidebar */}
+        {deferredPrompt && (
+          <div className="px-4 pb-3 shrink-0">
+            <button
+              onClick={handleInstallApp}
+              className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center justify-between gap-2 transition-all shadow-[0_0_8px_rgba(59,130,246,0.25)] border border-blue-500 active:scale-95 cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Download className="w-3.5 h-3.5 animate-bounce" />
+                <span>Install UDGTP App</span>
+              </div>
+              <span className="text-[9px] bg-blue-800 px-1.5 py-0.5 rounded text-blue-100 uppercase font-bold tracking-wider animate-pulse">Get</span>
+            </button>
+          </div>
+        )}
+
         {/* Search Previous Chats */}
         <div className="px-4 pb-2 pt-1 shrink-0">
           <div className="relative flex items-center">
@@ -1099,6 +1311,21 @@ export default function App() {
             <SettingsIcon className="w-4 h-4" />
             <span>Settings Panel</span>
           </button>
+
+          <button
+            onClick={() => {
+              setActiveTab("help");
+              setIsSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-all ${
+              activeTab === "help"
+                ? "bg-zinc-800/80 text-white"
+                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+            }`}
+          >
+            <HelpCircle className="w-4 h-4" />
+            <span>Help &amp; Guide</span>
+          </button>
         </div>
       </aside>
 
@@ -1146,6 +1373,22 @@ export default function App() {
                   <span>New Chat Session</span>
                 </button>
               </div>
+
+              {/* PWA Install Banner on Mobile */}
+              {deferredPrompt && (
+                <div className="px-3 pb-2 shrink-0">
+                  <button
+                    onClick={handleInstallApp}
+                    className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center justify-between gap-2 transition-all shadow-[0_0_8px_rgba(59,130,246,0.25)] border border-blue-500 active:scale-95 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Download className="w-3.5 h-3.5 animate-bounce" />
+                      <span>Install UDGTP App</span>
+                    </div>
+                    <span className="text-[9px] bg-blue-800 px-1.5 py-0.5 rounded text-blue-100 uppercase font-bold tracking-wider animate-pulse">Get</span>
+                  </button>
+                </div>
+              )}
 
               {/* Mobile Search Previous Chats */}
               <div className="px-3 pb-2 pt-1 shrink-0">
@@ -1302,6 +1545,18 @@ export default function App() {
                   <SettingsIcon className="w-4 h-4" />
                   <span>Settings Panel</span>
                 </button>
+                <button
+                  onClick={() => {
+                    setActiveTab("help");
+                    setIsSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer ${
+                    activeTab === "help" ? "bg-zinc-800 text-white" : "text-zinc-400"
+                  }`}
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span>Help &amp; Guide</span>
+                </button>
               </div>
             </motion.aside>
           </>
@@ -1324,16 +1579,30 @@ export default function App() {
             
             {/* Tab Title Indicator */}
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-zinc-400 animate-pulse" />
+              <span className={`w-2 h-2 rounded-full animate-pulse ${isOnline ? "bg-blue-500" : "bg-red-500"}`} />
               <h1 className="text-sm md:text-base font-bold tracking-tight">
                 {activeTab === "chat" && (activeConversation?.title || "AI Workspace")}
-                {activeTab === "profile" && "Pratham's Profile Profile"}
+                {activeTab === "profile" && "Your Profile"}
                 {activeTab === "settings" && "General Settings"}
+                {activeTab === "help" && "Help & Documentation"}
               </h1>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Network Badge Status */}
+            {isOnline ? (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                <span>Online</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/10 text-red-400 border border-red-500/20 text-[10px] font-bold uppercase tracking-wider animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                <span>Offline</span>
+              </div>
+            )}
+
             {/* Live Clock HUD */}
             <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/60 text-zinc-400 border border-zinc-800/60 text-xs font-mono">
               <Clock className="w-3.5 h-3.5 text-zinc-500" />
@@ -1385,56 +1654,80 @@ export default function App() {
             
             {/* ZERO-STATE: Dynamic Welcome & Sugesstion Pills */}
             {messages.length === 0 ? (
-              <div className="max-w-2xl mx-auto space-y-8 py-6 md:py-12">
-                
-                {/* Brand Visual Intro */}
-                <div className="text-center space-y-3.5">
-                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-black border border-zinc-800 text-white text-3xl font-extrabold mb-1 shadow-[0_0_15px_rgba(255,255,255,0.15)]">
-                    U
+              !isOnline ? (
+                <div className="max-w-md mx-auto py-16 md:py-24 text-center space-y-6">
+                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-red-500/10 border border-red-500/20 text-red-400 shadow-[0_0_20px_rgba(239,68,68,0.15)]">
+                    <WifiOff className="h-8 w-8 animate-pulse" />
                   </div>
-                  <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight animate-fade-in">
-                    Hello! I'm UDGTP. How can I help you today?
-                  </h2>
-                  <p className="text-xs md:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
-                    I am highly optimized to support coding roadmaps, technical guidance, organic agriculture steps, and traditional Indian advice. Let's begin!
-                  </p>
-                </div>
-
-                {/* Suggestions Pills Grid */}
-                <div className="space-y-4">
-                  <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-center">
-                    Choose a suggested prompt to start
-                  </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {SUGGESTIONS.map((sug) => (
-                      <button
-                        key={sug.id}
-                        onClick={() => handleSendMessage(sug.text)}
-                        className={`group flex items-start gap-3.5 p-4 rounded-2xl border text-left cursor-pointer transition-all duration-150 ${cardClass} ${hoverCardClass}`}
-                      >
-                        <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 shrink-0">
-                          {getSuggestionIcon(sug.icon)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="block text-xs md:text-sm font-semibold text-zinc-200 group-hover:text-white truncate">
-                            {sug.title}
-                          </span>
-                          <span className="block text-[11px] text-zinc-400 font-normal line-clamp-1 mt-0.5">
-                            {sug.text}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
+                  <div className="space-y-2">
+                    <h2 className="text-xl md:text-2xl font-black text-zinc-100 tracking-tight">
+                      You're offline
+                    </h2>
+                    <p className="text-xs md:text-sm text-zinc-400 leading-relaxed max-w-sm mx-auto">
+                      Connect to the internet to continue chatting with UDGTP.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-[#070708] border border-zinc-850 space-y-3 text-left">
+                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest block">
+                      Local Workspace Status
+                    </span>
+                    <p className="text-xs text-zinc-400">
+                      You can still read previous conversations from the sidebar panel while offline.
+                    </p>
                   </div>
                 </div>
+              ) : (
+                <div className="max-w-2xl mx-auto space-y-8 py-6 md:py-12">
+                  
+                  {/* Brand Visual Intro */}
+                  <div className="text-center space-y-3.5">
+                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-black border border-zinc-800 text-white text-3xl font-extrabold mb-1 shadow-[0_0_15px_rgba(255,255,255,0.15)]">
+                      U
+                    </div>
+                    <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight animate-fade-in">
+                      Hello! I'm UDGTP. How can I help you today?
+                    </h2>
+                    <p className="text-xs md:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
+                      I am highly optimized to support coding roadmaps, technical guidance, organic agriculture steps, and traditional Indian advice. Let's begin!
+                    </p>
+                  </div>
 
-                {/* Micro Help Footer Info */}
-                <div className="flex items-center justify-center gap-1.5 text-[10px] text-zinc-500 italic">
-                  <Compass className="w-3.5 h-3.5 text-zinc-600" />
-                  <span>Preferences set to {language} dialect mode</span>
+                  {/* Suggestions Pills Grid */}
+                  <div className="space-y-4">
+                    <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-center">
+                      Choose a suggested prompt to start
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {SUGGESTIONS.map((sug) => (
+                        <button
+                          key={sug.id}
+                          onClick={() => handleSendMessage(sug.text)}
+                          className={`group flex items-start gap-3.5 p-4 rounded-2xl border text-left cursor-pointer transition-all duration-150 ${cardClass} ${hoverCardClass}`}
+                        >
+                          <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 shrink-0">
+                            {getSuggestionIcon(sug.icon)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <span className="block text-xs md:text-sm font-semibold text-zinc-200 group-hover:text-white truncate">
+                              {sug.title}
+                            </span>
+                            <span className="block text-[11px] text-zinc-400 font-normal line-clamp-1 mt-0.5">
+                              {sug.text}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Micro Help Footer Info */}
+                  <div className="flex items-center justify-center gap-1.5 text-[10px] text-zinc-500 italic">
+                    <Compass className="w-3.5 h-3.5 text-zinc-600" />
+                    <span>Preferences set to {language} dialect mode</span>
+                  </div>
+
                 </div>
-
-              </div>
+              )
             ) : (
               
               /* CHAT MESSAGES LOG */
@@ -1500,7 +1793,11 @@ export default function App() {
                           </div>
                         ) : (
                           <div className="space-y-4">
-                            <MarkdownView text={msg.content} />
+                            <TypewriterView 
+                              text={msg.content} 
+                              isStreaming={loading && idx === messages.length - 1 && msg.role === "model"}
+                              onTyped={() => scrollToBottom("auto")}
+                            />
                             
                             {/* Render Model Attached/Generated Images with Download Option */}
                             {msg.attachments && msg.attachments.length > 0 && (
@@ -1519,10 +1816,10 @@ export default function App() {
                                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                                           <button
                                             onClick={() => handleOpenAttachmentProperly(att, attIdx, msg.id)}
-                                            className="bg-zinc-950/90 hover:bg-zinc-950 border border-zinc-800 p-2 rounded-xl text-white cursor-pointer shadow-md flex items-center gap-1.5 text-xs font-semibold transition-colors hover:text-emerald-400"
+                                            className="bg-zinc-950/90 hover:bg-zinc-950 border border-zinc-800 p-2 rounded-xl text-white cursor-pointer shadow-md flex items-center gap-1.5 text-xs font-semibold transition-colors hover:text-blue-400"
                                             title="Open link properly without redirect warnings"
                                           >
-                                            <Globe className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                                            <Globe className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
                                             <span>Open proper link</span>
                                           </button>
                                           <button
@@ -1630,7 +1927,7 @@ export default function App() {
                 })}
 
                 {/* Generating Loading States */}
-                {loading && (
+                {loading && (messages.length === 0 || messages[messages.length - 1].role !== "model") && (
                   <div className="flex gap-3 md:gap-4 justify-start">
                     <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-black border border-zinc-800 text-white font-extrabold text-sm flex items-center justify-center shrink-0 shadow-[0_0_8px_rgba(255,255,255,0.15)]">
                       U
@@ -1827,6 +2124,58 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Progressive Web App (PWA) Installation Options */}
+              <div className="space-y-3 pt-4 border-t border-zinc-800/40">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <Download className="w-4 h-4 text-zinc-500" />
+                  Offline & Device Installation
+                </h3>
+                <p className="text-xs text-zinc-500 leading-relaxed">
+                  UDGTP can be installed locally on Android, Windows, macOS, and iOS devices. Running as an app provides standalone fullscreen operation, offline startup, and native-feeling responses.
+                </p>
+                
+                {isInstalled ? (
+                  <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 text-zinc-300 text-xs flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span>UDGTP is successfully installed and running on this device!</span>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <span className="text-xs font-bold text-zinc-200 block">✦ Install UDGTP App</span>
+                        <span className="text-[11px] text-zinc-500 leading-relaxed block mt-0.5">
+                          {deferredPrompt 
+                            ? "Installation is supported natively on this browser!" 
+                            : "Click the button or add to home screen manually via your browser's options."}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleInstallApp}
+                        className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
+                          deferredPrompt 
+                            ? "bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                            : "bg-zinc-850 hover:bg-zinc-800 text-zinc-300 border-zinc-800"
+                        }`}
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>{deferredPrompt ? "Install Now" : "Install Options"}</span>
+                      </button>
+                    </div>
+
+                    {!deferredPrompt && (
+                      <div className="border-t border-zinc-800/60 pt-2.5 text-[10px] text-zinc-500 space-y-1">
+                        <span className="font-bold text-zinc-400 block">Device Installation Instructions:</span>
+                        <p>• <strong className="text-zinc-400">Android / Chrome:</strong> Click the 3-dots menu button at top-right and select <strong className="text-zinc-400">Install app</strong>.</p>
+                        <p>• <strong className="text-zinc-400">iOS / Safari:</strong> Tap the <strong className="text-zinc-400">Share</strong> icon at the bottom center and select <strong className="text-zinc-400">Add to Home Screen</strong>.</p>
+                        <p>• <strong className="text-zinc-400">Windows & macOS (Chrome/Edge):</strong> Click the install icon <strong className="text-zinc-400">⊕</strong> in the browser's address bar.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* About Section */}
               <div className="space-y-3 pt-4 border-t border-zinc-800/40">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
@@ -1850,6 +2199,120 @@ export default function App() {
 
             </div>
 
+          </div>
+        )}
+
+        {/* VIEW 4: HELP PAGE */}
+        {activeTab === "help" && (
+          <div className="flex-1 overflow-y-auto px-4 py-8 md:px-8 max-w-3xl mx-auto w-full space-y-6">
+            <div className={`p-6 md:p-8 rounded-2xl border ${cardClass} space-y-6`}>
+              
+              <h2 className="text-lg font-bold border-b pb-4 border-zinc-800/40 flex items-center gap-2">
+                <HelpCircle className="w-5 h-5 text-blue-400" />
+                Help &amp; Documentation
+              </h2>
+
+              {/* Chat & Prompting Tips */}
+              <div className="space-y-2">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-blue-400" />
+                  How to chat with UDGTP
+                </h3>
+                <p className="text-xs text-zinc-500 leading-relaxed font-sans">
+                  UDGTP is highly adaptive. When starting a conversation, UDGTP will greet you in English. From there, you can continue talking in English, Hindi (हिंदी), or Hinglish!
+                </p>
+                <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-850/60 space-y-2.5 text-xs text-zinc-300">
+                  <p>• <strong className="text-white">Hindi/Hinglish:</strong> If you speak in Hindi or Hinglish, UDGTP will adopt a warm, respectful and friendly conversational tone (e.g. "राम राम लाडले, के ज्ञान हैं!").</p>
+                  <p>• <strong className="text-white">Clarification:</strong> If your request or task is unclear, UDGTP will politely ask for clarification instead of guessing.</p>
+                  <p>• <strong className="text-white">Honesty:</strong> If UDGTP doesn't know an answer, it will clearly state so instead of making up facts.</p>
+                </div>
+              </div>
+
+              {/* Multimedia & Voice Capabilities */}
+              <div className="space-y-3 pt-3">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  Multimodal &amp; Speech Support
+                </h3>
+                <p className="text-xs text-zinc-500 leading-relaxed font-sans">
+                  Enjoy seamless interaction using your camera, microphone, or image files.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/40 space-y-1.5">
+                    <span className="text-xs font-bold text-zinc-200 block flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-blue-400" />
+                      Visual Uploads
+                    </span>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed">
+                      Upload images or drag-and-drop directly into the workspace. UDGTP can read text, analyze photos, and explain diagram code.
+                    </p>
+                  </div>
+                  <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/40 space-y-1.5">
+                    <span className="text-xs font-bold text-zinc-200 block flex items-center gap-1.5">
+                      <Mic className="w-4 h-4 text-blue-400" />
+                      Voice Input/Output
+                    </span>
+                    <p className="text-[11px] text-zinc-500 leading-relaxed font-sans">
+                      Click the microphone icon to speak. Click the sound speaker icon to listen to UDGTP's replies with high-quality text-to-speech.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Document Support */}
+              <div className="space-y-2 pt-3">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  Document Analysis
+                </h3>
+                <p className="text-xs text-zinc-500 leading-relaxed font-sans">
+                  Analyze PDF, TXT, or DOCX documents easily by uploading them.
+                </p>
+                <p className="text-xs text-zinc-400 font-sans">
+                  Simply drag-and-drop your documents or click the paperclip attachment button. Text files will be parsed and injected into the chat context automatically!
+                </p>
+              </div>
+
+              {/* Installable PWA Banner inside Help */}
+              <div className="space-y-3 pt-3 border-t border-zinc-800/40">
+                <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                  <Download className="w-4 h-4 text-blue-400" />
+                  Install App &amp; Offline Mode
+                </h3>
+                <p className="text-xs text-zinc-500 leading-relaxed font-sans">
+                  Install UDGTP as a Progressive Web App (PWA) to enjoy standalone fullscreen experience, offline startups, and optimized loading speeds.
+                </p>
+                
+                {isInstalled ? (
+                  <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 text-zinc-300 text-xs flex items-center gap-2 font-sans">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                    <span>UDGTP App is fully installed and operating locally!</span>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-850/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans">
+                    <div>
+                      <span className="text-xs font-bold text-zinc-200 block">✦ Install App Shell</span>
+                      <span className="text-[11px] text-zinc-500 block mt-0.5">
+                        {deferredPrompt ? "Installation is supported on this device!" : "Add to home screen via your browser's options."}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleInstallApp}
+                      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-semibold cursor-pointer transition-all ${
+                        deferredPrompt 
+                          ? "bg-blue-600 hover:bg-blue-500 text-white border-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                          : "bg-zinc-850 hover:bg-zinc-800 text-zinc-300 border-zinc-800"
+                      }`}
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>{deferredPrompt ? "Install Now" : "Install Options"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
         )}
 
@@ -1904,16 +2367,13 @@ export default function App() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => setIsGenerateImageMode(!isGenerateImageMode)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border cursor-pointer transition-all ${
-                      isGenerateImageMode
-                        ? "bg-blue-500/15 border-blue-500/40 text-blue-400 font-bold shadow-[0_0_12px_rgba(59,130,246,0.15)]"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
-                    }`}
-                    title="Toggle एआई इमेज जनरेशन मोड (AI Image Generation Mode)"
+                    onClick={() => setShowImagePremiumModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 cursor-pointer transition-all"
+                    title="एआई इमेज जनरेशन के लिए भुगतान वाली कुंजी आवश्यक है (Paid key required for AI Image Generation)"
                   >
-                    <Sparkles className={`w-3.5 h-3.5 ${isGenerateImageMode ? "text-blue-400 animate-pulse" : "text-zinc-400"}`} />
-                    <span>{isGenerateImageMode ? "Generate Image: ON" : "Generate Image Mode"}</span>
+                    <Sparkles className="w-3.5 h-3.5 text-zinc-500" />
+                    <span>Generate Image Mode</span>
+                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-zinc-800 text-amber-500 uppercase tracking-wider">Paid</span>
                   </button>
                 )}
 
@@ -1953,12 +2413,36 @@ export default function App() {
               )}
 
               {/* Main Submit Form with integrated voice and attachment tools */}
+              {!isOnline && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 rounded-2xl bg-red-950/15 border border-red-900/30 text-zinc-100 text-xs md:text-sm shadow-xl relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-[2px] bg-red-500 animate-pulse" />
+                  <div className="flex items-center gap-3.5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400">
+                      <WifiOff className="h-5 w-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-zinc-100 text-xs sm:text-sm">You're offline</p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">Connect to the internet to continue chatting with UDGTP.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-900 text-zinc-500 text-xs font-bold cursor-not-allowed flex items-center justify-center gap-2 select-none"
+                  >
+                    <Send className="w-3.5 h-3.5 opacity-40" />
+                    <span>Send Disabled</span>
+                  </button>
+                </div>
+              )}
+
               <form 
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (!isOnline) return;
                   handleSendMessage();
                 }}
-                className="relative flex items-center"
+                className={!isOnline ? "hidden" : "relative flex items-center"}
               >
                 {/* Hidden File Input */}
                 <input
@@ -1998,7 +2482,7 @@ export default function App() {
                   className="absolute left-11 p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 transition-all cursor-pointer disabled:opacity-40"
                   title="Upload Image"
                 >
-                  <ImageIcon className="w-4 h-4 text-emerald-500" />
+                  <ImageIcon className="w-4 h-4 text-blue-500" />
                 </button>
 
                 <input
@@ -2062,6 +2546,79 @@ export default function App() {
         )}
 
       </main>
+
+      {/* PREMIUM MODAL OVERLAY */}
+      <AnimatePresence>
+        {showImagePremiumModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowImagePremiumModal(false)}
+              className="absolute inset-0 bg-black"
+            />
+            
+            {/* Modal Box */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative w-full max-w-md overflow-hidden rounded-3xl border border-zinc-800 bg-[#0c0c0e] p-6 shadow-2xl text-center"
+            >
+              {/* Glowing Top Line Accent */}
+              <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
+              
+              {/* Visual Icon */}
+              <div className="mx-auto my-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-900 border border-zinc-800 text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              
+              {/* Title */}
+              <h3 className="text-lg font-bold text-zinc-100 tracking-tight mt-4">
+                Paid API Key Required
+              </h3>
+              <p className="text-[11px] text-zinc-500 font-bold uppercase tracking-widest mt-1">
+                Premium AI Feature
+              </p>
+              
+              {/* Explanation */}
+              <div className="mt-4 text-left space-y-3.5 bg-zinc-950/50 p-4 rounded-2xl border border-zinc-900 text-zinc-300 text-xs leading-relaxed">
+                <p>
+                  Image generation models (like <code className="text-blue-400 font-mono bg-blue-950/20 px-1 rounded">gemini-3.1-flash-lite-image</code>) require a supported paid Gemini API key.
+                </p>
+                <p className="font-semibold text-zinc-400 border-t border-zinc-900 pt-2 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  Available Free Features:
+                </p>
+                <ul className="space-y-1.5 pl-3 list-disc text-zinc-400 text-[11px]">
+                  <li>
+                    <strong className="text-zinc-200">Text Chats & Guidance:</strong> 100% active and free without errors.
+                  </li>
+                  <li>
+                    <strong className="text-zinc-200">Image Uploads & Visual analysis:</strong> Fully supported! Drag-and-drop or select images to do deep analysis/OCR.
+                  </li>
+                </ul>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowImagePremiumModal(false)}
+                  className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm cursor-pointer transition-all shadow-lg active:scale-98"
+                >
+                  Continue with Free Features
+                </button>
+                <p className="text-[10px] text-zinc-500 leading-relaxed mt-2">
+                  Configure a supported paid Gemini API key in <strong className="text-zinc-400">Settings &gt; Secrets</strong> to unlock premium generation models.
+                </p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
