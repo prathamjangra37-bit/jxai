@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
@@ -199,6 +198,7 @@ app.post("/api/chat", async (req, res) => {
 
 // API endpoint for Image Generation (Disabled in free version)
 app.post("/api/generate-image", async (req, res) => {
+  res.setHeader("Content-Type", "application/json");
   return res.status(403).json({
     error: "Image generation requires a supported paid Gemini API key. For the free version, please stick to text-based and image analysis requests which are fully active."
   });
@@ -212,6 +212,7 @@ app.post("/api/register-media", (req, res) => {
   try {
     const { data, name, mimeType } = req.body;
     if (!data) {
+      res.setHeader("Content-Type", "application/json");
       return res.status(400).json({ error: "Data is required." });
     }
     const id = Math.random().toString(36).substring(2, 15);
@@ -220,10 +221,12 @@ app.post("/api/register-media", (req, res) => {
       name: name || `file-${id}.png`, 
       mimeType: mimeType || "image/png" 
     });
-    res.json({ url: `/api/media/${id}` });
+    res.setHeader("Content-Type", "application/json");
+    return res.status(200).json({ url: `/api/media/${id}` });
   } catch (error: any) {
     console.error("Register Media Error:", error);
-    res.status(500).json({ error: error.message || "Failed to register media" });
+    res.setHeader("Content-Type", "application/json");
+    return res.status(500).json({ error: error.message || "Failed to register media" });
   }
 });
 
@@ -231,6 +234,7 @@ app.post("/api/register-media", (req, res) => {
 app.get("/api/media/:id", (req, res) => {
   const media = mediaCache.get(req.params.id);
   if (!media) {
+    res.setHeader("Content-Type", "application/json");
     return res.status(404).json({
       error: "File Expired or Not Found. The requested media may have expired because the server restarted, or the URL link is invalid. Please generate a new image/file in your chat session!"
     });
@@ -252,13 +256,15 @@ app.get("/api/media/:id", (req, res) => {
     }
   } catch (error: any) {
     console.error("Serve Media Error:", error);
-    res.status(500).json({ error: error.message || "Error serving media file" });
+    res.setHeader("Content-Type", "application/json");
+    return res.status(500).json({ error: error.message || "Error serving media file" });
   }
 });
 
 // Catch-all handler for unhandled /api/* routes to guarantee they return JSON and never HTML
 app.all("/api/*", (req, res) => {
-  res.status(404).json({ 
+  res.setHeader("Content-Type", "application/json");
+  return res.status(404).json({ 
     error: `API route not found: ${req.method} ${req.originalUrl}` 
   });
 });
@@ -267,7 +273,8 @@ app.all("/api/*", (req, res) => {
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("Global Server Error:", err);
   const status = err.status || err.statusCode || 500;
-  res.status(status).json({
+  res.setHeader("Content-Type", "application/json");
+  return res.status(status).json({
     error: err.message || "An unexpected error occurred on the server."
   });
 });
@@ -278,6 +285,7 @@ async function setupApp() {
                  (typeof __filename !== "undefined" && __filename.endsWith("server.cjs"));
 
   if (!isProd) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
