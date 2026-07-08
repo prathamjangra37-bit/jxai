@@ -175,13 +175,7 @@ app.post("/api/chat", async (req, res) => {
    - यदि यूजर किसी विषय को सीखना या समझना चाहे, तो उसे शुरुआत (Beginner) से लेकर एडवांस लेवल (Advanced Level) तक का एक शानदार रोडमैप (Roadmap) बनाकर समझाओ।
 5. सामान्य सहायता: टेक्नोलॉजी, पढ़ाई, डेली लाइफ, बिज़नेस और जनरल नॉलेज से जुड़े हर सवाल में पूरी मदद करो।`;
 
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-    });
-
-    const responseStream = await client.models.generateContentStream({
+    const response = await client.models.generateContent({
       model: "gemini-3.5-flash",
       contents: contents,
       config: {
@@ -190,22 +184,16 @@ app.post("/api/chat", async (req, res) => {
       },
     });
 
-    for await (const chunk of responseStream) {
-      const text = chunk.text || "";
-      res.write(`data: ${JSON.stringify({ text })}\n\n`);
-    }
-    res.write("data: [DONE]\n\n");
-    res.end();
+    res.setHeader("Content-Type", "application/json");
+    return res.status(200).json({
+      text: response.text || ""
+    });
   } catch (error: any) {
     console.error("Gemini API Error:", error);
-    if (res.headersSent) {
-      res.write(`data: ${JSON.stringify({ error: error.message || "Ram Ram Bhai! Kuch takleef aayi hai." })}\n\n`);
-      res.end();
-    } else {
-      res.status(500).json({ 
-        error: error.message || "Ram Ram Bhai! Platform pe kuch takleef aayi hai. Kripya dubaara koshish karein." 
-      });
-    }
+    res.setHeader("Content-Type", "application/json");
+    return res.status(500).json({ 
+      error: error.message || "Ram Ram Bhai! Platform pe kuch takleef aayi hai. Kripya dubaara koshish karein." 
+    });
   }
 });
 

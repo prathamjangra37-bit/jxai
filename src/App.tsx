@@ -625,12 +625,48 @@ export default function App() {
           signal: controller.signal
         });
 
+        const contentType = res.headers.get("content-type") || "";
+        let data: any = {};
+
         if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Image generation failed. Please check your model support or parameters.");
+          let errorMessage = "Image generation failed. Please check your model support or parameters.";
+          if (contentType.includes("application/json")) {
+            try {
+              const errData = await res.json();
+              errorMessage = errData.error || errorMessage;
+            } catch (jsonErr) {
+              console.error("Failed to parse JSON error:", jsonErr);
+            }
+          } else {
+            try {
+              const rawText = await res.text();
+              console.error("Non-JSON Server Error:", rawText);
+              if (rawText && rawText.length < 200) {
+                errorMessage = rawText;
+              }
+            } catch (textErr) {
+              console.error("Failed to read raw error text:", textErr);
+            }
+          }
+          throw new Error(errorMessage);
         }
 
-        const data = await res.json();
+        if (contentType.includes("application/json")) {
+          try {
+            data = await res.json();
+          } catch (jsonErr) {
+            console.error("Error parsing JSON response:", jsonErr);
+            throw new Error("Received an invalid response format from the server. Expected JSON but failed to parse.");
+          }
+        } else {
+          try {
+            const rawText = await res.text();
+            console.error("Non-JSON Success Response received:", rawText);
+            throw new Error("Received a non-JSON response from the server. Please verify your connection.");
+          } catch (textErr) {
+            throw new Error("Received an empty or malformed non-JSON response from the server.");
+          }
+        }
 
         // Add model message containing the generated image as an attachment
         const modelMsg: Message = {
@@ -693,68 +729,95 @@ export default function App() {
           signal: controller.signal
         });
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "The server failed to respond. Please try again.");
-        }
-
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder("utf-8");
-        if (!reader) {
-          throw new Error("Response stream is not available.");
-        }
-
+        const contentType = res.headers.get("content-type") || "";
         let replyContent = "";
-        let buffer = "";
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep partial line in buffer
-
-          for (const line of lines) {
-            const cleaned = line.trim();
-            if (!cleaned) continue;
-
-            if (cleaned.startsWith("data: ")) {
-              const dataStr = cleaned.substring(6);
-              if (dataStr === "[DONE]") {
-                break;
+        if (!res.ok) {
+          let errorMessage = "The server failed to respond. Please try again.";
+          if (contentType.includes("application/json")) {
+            try {
+              const errData = await res.json();
+              errorMessage = errData.error || errorMessage;
+            } catch (jsonErr) {
+              console.error("Failed to parse JSON error:", jsonErr);
+            }
+          } else {
+            try {
+              const rawText = await res.text();
+              console.error("Non-JSON Server Error:", rawText);
+              if (rawText && rawText.length < 200) {
+                errorMessage = rawText;
               }
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.error) {
-                  throw new Error(parsed.error);
-                }
-                if (parsed.text) {
-                  replyContent += parsed.text;
-                  
-                  // Update message in-place
-                  setConversations((prev) =>
-                    prev.map((c) =>
-                      c.id === currentId
-                        ? {
-                            ...c,
-                            messages: c.messages.map((m) =>
-                              m.id === modelMsgId
-                                ? { ...m, content: replyContent }
-                                : m
-                            )
-                          }
-                        : c
-                    )
-                  );
-                }
-              } catch (e: any) {
-                if (e.message && e.message.includes("Ram Ram")) {
-                  throw e;
-                }
-              }
+            } catch (textErr) {
+              console.error("Failed to read raw error text:", textErr);
             }
           }
+          throw new Error(errorMessage);
+        }
+
+        let data: any = {};
+        if (contentType.includes("application/json")) {
+          try {
+            data = await res.json();
+          } catch (jsonErr) {
+            console.error("Error parsing JSON response:", jsonErr);
+            throw new Error("Received an invalid response format from the server. Expected JSON but failed to parse.");
+          }
+        } else {
+          try {
+            const rawText = await res.text();
+            console.error("Non-JSON Success Response received:", rawText);
+            throw new Error("Received a non-JSON response from the server. Please verify your connection.");
+          } catch (textErr) {
+            throw new Error("Received an empty or malformed non-JSON response from the server.");
+          }
+        }
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        const fullReply = data.text || "";
+        const chunkSize = 4;
+        const delay = 8;
+
+        for (let i = 0; i < fullReply.length; i += chunkSize) {
+          if (controller.signal.aborted) {
+            break;
+          }
+          replyContent += fullReply.substring(i, i + chunkSize);
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === currentId
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === modelMsgId
+                        ? { ...m, content: replyContent }
+                        : m
+                    )
+                  }
+                : c
+            )
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        if (!controller.signal.aborted) {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === currentId
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === modelMsgId
+                        ? { ...m, content: fullReply }
+                        : m
+                    )
+                  }
+                : c
+            )
+          );
         }
       }
     } catch (err: any) {
@@ -812,12 +875,48 @@ export default function App() {
           signal: controller.signal
         });
 
+        const contentType = res.headers.get("content-type") || "";
+        let data: any = {};
+
         if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Image generation failed.");
+          let errorMessage = "Image generation failed.";
+          if (contentType.includes("application/json")) {
+            try {
+              const errData = await res.json();
+              errorMessage = errData.error || errorMessage;
+            } catch (jsonErr) {
+              console.error("Failed to parse JSON error:", jsonErr);
+            }
+          } else {
+            try {
+              const rawText = await res.text();
+              console.error("Non-JSON Server Error:", rawText);
+              if (rawText && rawText.length < 200) {
+                errorMessage = rawText;
+              }
+            } catch (textErr) {
+              console.error("Failed to read raw error text:", textErr);
+            }
+          }
+          throw new Error(errorMessage);
         }
 
-        const data = await res.json();
+        if (contentType.includes("application/json")) {
+          try {
+            data = await res.json();
+          } catch (jsonErr) {
+            console.error("Error parsing JSON response:", jsonErr);
+            throw new Error("Received an invalid response format from the server. Expected JSON but failed to parse.");
+          }
+        } else {
+          try {
+            const rawText = await res.text();
+            console.error("Non-JSON Success Response received:", rawText);
+            throw new Error("Received a non-JSON response from the server. Please verify your connection.");
+          } catch (textErr) {
+            throw new Error("Received an empty or malformed non-JSON response from the server.");
+          }
+        }
 
         const modelMsg: Message = {
           id: Math.random().toString(36).substring(7),
@@ -873,68 +972,95 @@ export default function App() {
           signal: controller.signal
         });
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "The server failed to respond.");
-        }
-
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder("utf-8");
-        if (!reader) {
-          throw new Error("Response stream is not available.");
-        }
-
+        const contentType = res.headers.get("content-type") || "";
         let replyContent = "";
-        let buffer = "";
 
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // Keep partial line in buffer
-
-          for (const line of lines) {
-            const cleaned = line.trim();
-            if (!cleaned) continue;
-
-            if (cleaned.startsWith("data: ")) {
-              const dataStr = cleaned.substring(6);
-              if (dataStr === "[DONE]") {
-                break;
+        if (!res.ok) {
+          let errorMessage = "The server failed to respond.";
+          if (contentType.includes("application/json")) {
+            try {
+              const errData = await res.json();
+              errorMessage = errData.error || errorMessage;
+            } catch (jsonErr) {
+              console.error("Failed to parse JSON error:", jsonErr);
+            }
+          } else {
+            try {
+              const rawText = await res.text();
+              console.error("Non-JSON Server Error:", rawText);
+              if (rawText && rawText.length < 200) {
+                errorMessage = rawText;
               }
-              try {
-                const parsed = JSON.parse(dataStr);
-                if (parsed.error) {
-                  throw new Error(parsed.error);
-                }
-                if (parsed.text) {
-                  replyContent += parsed.text;
-                  
-                  // Update message in-place
-                  setConversations((prev) =>
-                    prev.map((c) =>
-                      c.id === activeId
-                        ? {
-                            ...c,
-                            messages: c.messages.map((m) =>
-                              m.id === modelMsgId
-                                ? { ...m, content: replyContent }
-                                : m
-                            )
-                          }
-                        : c
-                    )
-                  );
-                }
-              } catch (e: any) {
-                if (e.message && e.message.includes("Ram Ram")) {
-                  throw e;
-                }
-              }
+            } catch (textErr) {
+              console.error("Failed to read raw error text:", textErr);
             }
           }
+          throw new Error(errorMessage);
+        }
+
+        let data: any = {};
+        if (contentType.includes("application/json")) {
+          try {
+            data = await res.json();
+          } catch (jsonErr) {
+            console.error("Error parsing JSON response:", jsonErr);
+            throw new Error("Received an invalid response format from the server. Expected JSON but failed to parse.");
+          }
+        } else {
+          try {
+            const rawText = await res.text();
+            console.error("Non-JSON Success Response received:", rawText);
+            throw new Error("Received a non-JSON response from the server. Please verify your connection.");
+          } catch (textErr) {
+            throw new Error("Received an empty or malformed non-JSON response from the server.");
+          }
+        }
+
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        const fullReply = data.text || "";
+        const chunkSize = 4;
+        const delay = 8;
+
+        for (let i = 0; i < fullReply.length; i += chunkSize) {
+          if (controller.signal.aborted) {
+            break;
+          }
+          replyContent += fullReply.substring(i, i + chunkSize);
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === activeId
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === modelMsgId
+                        ? { ...m, content: replyContent }
+                        : m
+                    )
+                  }
+                : c
+            )
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        if (!controller.signal.aborted) {
+          setConversations((prev) =>
+            prev.map((c) =>
+              c.id === activeId
+                ? {
+                    ...c,
+                    messages: c.messages.map((m) =>
+                      m.id === modelMsgId
+                        ? { ...m, content: fullReply }
+                        : m
+                    )
+                  }
+                : c
+            )
+          );
         }
       }
       handleShowNotification("Response regenerated successfully.");
