@@ -1,12 +1,7 @@
 // Shared Express application configuration for UDGTP
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
-import dotenv from "dotenv";
-
-
-dotenv.config();
-
-const app = express();
+import dotenv from "dotenv"
 
 // Set body parsers...
 app.use(express.json({ limit: "50mb" }));
