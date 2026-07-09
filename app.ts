@@ -1,4 +1,4 @@
-// Shared Express application configuration for UDGTP
+model: "gemini-2.5-flash",// Shared Express application configuration for UDGTP
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
