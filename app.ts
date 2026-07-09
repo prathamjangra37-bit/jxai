@@ -1,11 +1,13 @@
 // Shared Express application configuration for UDGTP
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
-import dotenv from "dotenv"
+import dotenv from "dotenv";
+
 dotenv.config();
 
 const app = express();
-// Set body parsers...
+
+// Set body parsers with limits for handling base64-encoded visual attachments
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
