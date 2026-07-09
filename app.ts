@@ -1,7 +1,11 @@
 // Shared Express application configuration for UDGTP
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
-import dotenv from "dotenv";",// Shared Express application configuration for UDGTP
+import dotenv from "dotenv";
+
+dotenv.config();
+
+const app = express();
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
