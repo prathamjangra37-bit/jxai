@@ -5,9 +5,9 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-
-
 const app = express();
+
+// Set body parsers with limits...
 
 // Set body parsers with limits for handling base64-encoded visual attachments
 app.use(express.json({ limit: "50mb" }));
