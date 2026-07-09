@@ -3,13 +3,15 @@ import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
+import express from "express";
+import { GoogleGenAI } from "@google/genai";
+import dotenv from "dotenv";
+
 dotenv.config();
 
 const app = express();
 
-// Set body parsers with limits...
-
-// Set body parsers with limits for handling base64-encoded visual attachments
+// Set body parsers...
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
