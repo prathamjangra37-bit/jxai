@@ -14,10 +14,10 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
       .then(reg => {
-        console.log('UDGTP Service Worker registered successfully!', reg.scope);
+        console.log('JX AI Service Worker registered successfully!', reg.scope);
       })
       .catch(err => {
-        console.error('UDGTP Service Worker registration failed:', err);
+        console.error('JX AI Service Worker registration failed:', err);
       });
   });
 }

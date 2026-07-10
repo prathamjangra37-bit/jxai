@@ -30,14 +30,14 @@ export const SUGGESTIONS: Suggestion[] = [
 export const PRINCIPLES: DeveloperNote[] = [
   {
     title: "Deis Tone & Dialect",
-    description: "UDGTP communicates with a sweet blend of Haryanvi and Hindi, reflecting respect, local warmth, and a friendly 'Ram Ram' culture."
+    description: "JX AI communicates with a sweet blend of Haryanvi and Hindi, reflecting respect, local warmth, and a friendly 'Ram Ram' culture."
   },
   {
     title: "Step-by-Step Guidance",
-    description: "If you want to learn something, UDGTP guides you slowly and thoroughly with simple words and practical examples."
+    description: "If you want to learn something, JX AI guides you slowly and thoroughly with simple words and practical examples."
   },
   {
     title: "Absolute Honesty",
-    description: "If UDGTP does not know the answer to a question, it will be honest and say so instead of giving incorrect or made-up information."
+    description: "If JX AI does not know the answer to a question, it will be honest and say so instead of giving incorrect or made-up information."
   }
 ];

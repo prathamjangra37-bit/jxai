@@ -1229,10 +1229,10 @@ export default function App() {
         <div className={`p-5 flex items-center justify-between border-b ${subBorderClass}`}>
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-black border border-zinc-800 text-white flex items-center justify-center font-bold text-lg shadow-[0_0_8px_rgba(255,255,255,0.15)]">
-              U
+              J
             </div>
             <div>
-              <h2 className="text-base font-bold tracking-tight text-white">UDGTP</h2>
+              <h2 className="text-base font-bold tracking-tight text-white">JX AI</h2>
               <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1">
                 <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                 Active v3.5
@@ -1261,7 +1261,7 @@ export default function App() {
             >
               <div className="flex items-center gap-2">
                 <Download className="w-3.5 h-3.5 animate-bounce" />
-                <span>Install UDGTP App</span>
+                <span>Install JX AI App</span>
               </div>
               <span className="text-[9px] bg-blue-800 px-1.5 py-0.5 rounded text-blue-100 uppercase font-bold tracking-wider animate-pulse">Get</span>
             </button>
@@ -1477,9 +1477,9 @@ export default function App() {
               <div className={`p-4 flex justify-between items-center border-b ${subBorderClass}`}>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-black border border-zinc-800 text-white flex items-center justify-center font-bold font-sans shadow-[0_0_8px_rgba(255,255,255,0.15)]">
-                    U
+                    J
                   </div>
-                  <span className="font-bold text-sm text-white">UDGTP v3.5</span>
+                  <span className="font-bold text-sm text-white">JX AI v3.5</span>
                 </div>
                 <button
                   onClick={() => setIsSidebarOpen(false)}
@@ -1509,7 +1509,7 @@ export default function App() {
                   >
                     <div className="flex items-center gap-2">
                       <Download className="w-3.5 h-3.5 animate-bounce" />
-                      <span>Install UDGTP App</span>
+                      <span>Install JX AI App</span>
                     </div>
                     <span className="text-[9px] bg-blue-800 px-1.5 py-0.5 rounded text-blue-100 uppercase font-bold tracking-wider animate-pulse">Get</span>
                   </button>
@@ -1790,7 +1790,7 @@ export default function App() {
                       You're offline
                     </h2>
                     <p className="text-xs md:text-sm text-zinc-400 leading-relaxed max-w-sm mx-auto">
-                      Connect to the internet to continue chatting with UDGTP.
+                      Connect to the internet to continue chatting with JX AI.
                     </p>
                   </div>
                   <div className="p-4 rounded-2xl bg-[#070708] border border-zinc-850 space-y-3 text-left">
@@ -1808,10 +1808,10 @@ export default function App() {
                   {/* Brand Visual Intro */}
                   <div className="text-center space-y-3.5">
                     <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-black border border-zinc-800 text-white text-3xl font-extrabold mb-1 shadow-[0_0_15px_rgba(255,255,255,0.15)]">
-                      U
+                      J
                     </div>
                     <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight animate-fade-in">
-                      Hello! I'm UDGTP. How can I help you today?
+                      Hello! I'm JX AI. How can I help you today?
                     </h2>
                     <p className="text-xs md:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
                       I am highly optimized to support coding roadmaps, technical guidance, organic agriculture steps, and traditional Indian advice. Let's begin!
@@ -2056,12 +2056,12 @@ export default function App() {
                 {loading && (messages.length === 0 || messages[messages.length - 1].role !== "model") && (
                   <div className="flex gap-3 md:gap-4 justify-start">
                     <div className="w-8 h-8 md:w-9 md:h-9 rounded-full bg-black border border-zinc-800 text-white font-extrabold text-sm flex items-center justify-center shrink-0 shadow-[0_0_8px_rgba(255,255,255,0.15)]">
-                      U
+                      J
                     </div>
                     <div className={`rounded-2xl rounded-tl-none border px-5 py-4 shadow-sm space-y-2.5 ${bubbleModelClass}`}>
                       <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-semibold italic">
                         <Sparkles className="w-3.5 h-3.5 text-zinc-400 animate-spin" />
-                        <span>UDGTP is looking up info...</span>
+                        <span>JX AI is looking up info...</span>
                       </div>
                       <div className="flex gap-1.5 py-1">
                         <span className="w-2 h-2 rounded-full bg-zinc-400 animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -2257,19 +2257,19 @@ export default function App() {
                   Offline & Device Installation
                 </h3>
                 <p className="text-xs text-zinc-500 leading-relaxed">
-                  UDGTP can be installed locally on Android, Windows, macOS, and iOS devices. Running as an app provides standalone fullscreen operation, offline startup, and native-feeling responses.
+                  JX AI can be installed locally on Android, Windows, macOS, and iOS devices. Running as an app provides standalone fullscreen operation, offline startup, and native-feeling responses.
                 </p>
                 
                 {isInstalled ? (
                   <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 text-zinc-300 text-xs flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span>UDGTP is successfully installed and running on this device!</span>
+                    <span>JX AI is successfully installed and running on this device!</span>
                   </div>
                 ) : (
                   <div className="p-4 rounded-xl border border-zinc-850 bg-zinc-950/40 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <span className="text-xs font-bold text-zinc-200 block">✦ Install UDGTP App</span>
+                        <span className="text-xs font-bold text-zinc-200 block">✦ Install JX AI App</span>
                         <span className="text-[11px] text-zinc-500 leading-relaxed block mt-0.5">
                           {deferredPrompt 
                             ? "Installation is supported natively on this browser!" 
@@ -2306,10 +2306,10 @@ export default function App() {
               <div className="space-y-3 pt-4 border-t border-zinc-800/40">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
                   <Info className="w-4 h-4 text-zinc-500" />
-                  About UDGTP Platform
+                  About JX AI Platform
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-                  UDGTP (Ultra-Dynamic Guidance Text Platform) is built on Google Gemini 3.5 Flash server-side engine APIs. It serves fully persistent chat sessions, supports rich nested rendering with custom copy controllers, and obeys localized cultural instructions.
+                  JX AI is built on the Google Gemini server-side engine APIs. It serves fully persistent chat sessions, supports rich nested rendering with custom copy controllers, and obeys localized cultural instructions.
                 </p>
                 
                 {/* Core Principles */}
@@ -2342,15 +2342,15 @@ export default function App() {
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
                   <MessageSquare className="w-4 h-4 text-blue-400" />
-                  How to chat with UDGTP
+                  How to chat with JX AI
                 </h3>
                 <p className="text-xs text-zinc-500 leading-relaxed font-sans">
-                  UDGTP is highly adaptive. When starting a conversation, UDGTP will greet you in English. From there, you can continue talking in English, Hindi (हिंदी), or Hinglish!
+                  JX AI is highly adaptive. When starting a conversation, JX AI will greet you in English. From there, you can continue talking in English, Hindi (हिंदी), or Hinglish!
                 </p>
                 <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-850/60 space-y-2.5 text-xs text-zinc-300">
-                  <p>• <strong className="text-white">Hindi/Hinglish:</strong> If you speak in Hindi or Hinglish, UDGTP will adopt a warm, respectful and friendly conversational tone (e.g. "राम राम लाडले, के ज्ञान हैं!").</p>
-                  <p>• <strong className="text-white">Clarification:</strong> If your request or task is unclear, UDGTP will politely ask for clarification instead of guessing.</p>
-                  <p>• <strong className="text-white">Honesty:</strong> If UDGTP doesn't know an answer, it will clearly state so instead of making up facts.</p>
+                  <p>• <strong className="text-white">Hindi/Hinglish:</strong> If you speak in Hindi or Hinglish, JX AI will adopt a warm, respectful and friendly conversational tone (e.g. "राम राम लाडले, के ज्ञान हैं!").</p>
+                  <p>• <strong className="text-white">Clarification:</strong> If your request or task is unclear, JX AI will politely ask for clarification instead of guessing.</p>
+                  <p>• <strong className="text-white">Honesty:</strong> If JX AI doesn't know an answer, it will clearly state so instead of making up facts.</p>
                 </div>
               </div>
 
@@ -2370,7 +2370,7 @@ export default function App() {
                       Visual Uploads
                     </span>
                     <p className="text-[11px] text-zinc-500 leading-relaxed">
-                      Upload images or drag-and-drop directly into the workspace. UDGTP can read text, analyze photos, and explain diagram code.
+                      Upload images or drag-and-drop directly into the workspace. JX AI can read text, analyze photos, and explain diagram code.
                     </p>
                   </div>
                   <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800/40 space-y-1.5">
@@ -2379,7 +2379,7 @@ export default function App() {
                       Voice Input/Output
                     </span>
                     <p className="text-[11px] text-zinc-500 leading-relaxed font-sans">
-                      Click the microphone icon to speak. Click the sound speaker icon to listen to UDGTP's replies with high-quality text-to-speech.
+                      Click the microphone icon to speak. Click the sound speaker icon to listen to JX AI's replies with high-quality text-to-speech.
                     </p>
                   </div>
                 </div>
@@ -2406,13 +2406,13 @@ export default function App() {
                   Install App &amp; Offline Mode
                 </h3>
                 <p className="text-xs text-zinc-500 leading-relaxed font-sans">
-                  Install UDGTP as a Progressive Web App (PWA) to enjoy standalone fullscreen experience, offline startups, and optimized loading speeds.
+                  Install JX AI as a Progressive Web App (PWA) to enjoy standalone fullscreen experience, offline startups, and optimized loading speeds.
                 </p>
                 
                 {isInstalled ? (
                   <div className="p-4 rounded-xl border border-zinc-800 bg-zinc-900/20 text-zinc-300 text-xs flex items-center gap-2 font-sans">
                     <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span>UDGTP App is fully installed and operating locally!</span>
+                    <span>JX AI App is fully installed and operating locally!</span>
                   </div>
                 ) : (
                   <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-850/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 font-sans">
@@ -2548,7 +2548,7 @@ export default function App() {
                     </div>
                     <div>
                       <p className="font-bold text-zinc-100 text-xs sm:text-sm">You're offline</p>
-                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">Connect to the internet to continue chatting with UDGTP.</p>
+                      <p className="text-[11px] text-zinc-400 mt-0.5 leading-tight">Connect to the internet to continue chatting with JX AI.</p>
                     </div>
                   </div>
                   <button
@@ -2617,8 +2617,8 @@ export default function App() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
                     isGenerateImageMode 
-                      ? "Describe the image you want UDGTP to generate..." 
-                      : "Message UDGTP..."
+                      ? "Describe the image you want JX AI to generate..." 
+                      : "Message JX AI..."
                   }
                   disabled={loading}
                   className={`w-full pl-[76px] pr-24 py-3.5 rounded-2xl border focus:outline-none transition-all text-sm md:text-base disabled:opacity-50 ${
@@ -2665,7 +2665,7 @@ export default function App() {
               </form>
               
               <p className="text-[10px] text-zinc-500 text-center mt-2.5 font-normal">
-                UDGTP may provide helpful summaries and step-by-step guidance. Confirm important facts.
+                JX AI may provide helpful summaries and step-by-step guidance. Confirm important facts.
               </p>
             </div>
           </div>

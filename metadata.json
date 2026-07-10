@@ -1,5 +1,5 @@
 {
-  "name": "Jangra AI",
+  "name": "JX AI",
   "description": "एक हरियाणवी और हिंदी AI सहायक जो आपसे बातें करे और आपके सवालों के जवाब देसी अंदाज में दे।",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
