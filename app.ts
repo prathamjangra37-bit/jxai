@@ -44,6 +44,62 @@ function getGeminiClient() {
 }
 
 // API endpoint for Chat
+async function callGeminiWithRetryAndFallback(
+  client: GoogleGenAI,
+  contents: any,
+  systemInstruction: string
+) {
+  const models = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  let lastError: any = null;
+
+  for (const modelName of models) {
+    const maxRetries = 2;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Attempting Gemini generation using model: ${modelName} (Attempt ${attempt}/${maxRetries})`);
+        const response = await client.models.generateContent({
+          model: modelName,
+          contents: contents,
+          config: {
+            systemInstruction,
+            temperature: 0.85,
+          },
+        });
+        
+        return {
+          response,
+          modelUsed: modelName
+        };
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`Error with model ${modelName} on attempt ${attempt}:`, err.message || err);
+        
+        const errMsg = (err.message || "").toLowerCase();
+        const isTransient = errMsg.includes("503") || 
+                            errMsg.includes("429") || 
+                            errMsg.includes("unavailable") || 
+                            errMsg.includes("demand") || 
+                            errMsg.includes("limit") ||
+                            errMsg.includes("temporary") ||
+                            errMsg.includes("overloaded");
+
+        if (!isTransient) {
+          break;
+        }
+
+        if (attempt < maxRetries) {
+          const delay = attempt * 1000;
+          console.log(`Waiting ${delay}ms before retrying ${modelName}...`);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    }
+    console.warn(`Model ${modelName} failed. Falling back to next available model if any...`);
+  }
+
+  throw lastError || new Error("All attempts with Gemini models failed.");
+}
+
 app.post("/api/chat", async (req, res) => {
   try {
     const { messages } = req.body;
@@ -174,18 +230,12 @@ app.post("/api/chat", async (req, res) => {
    - यदि यूजर किसी विषय को सीखना या समझना चाहे, तो उसे शुरुआत (Beginner) से लेकर एडवांस लेवल (Advanced Level) तक का एक शानदार रोडमैप (Roadmap) बनाकर समझाओ।
 5. सामान्य सहायता: टेक्नोलॉजी, पढ़ाई, डेली लाइफ, बिज़नेस और जनरल नॉलेज से जुड़े हर सवाल में पूरी मदद करो।`;
 
-    const response = await client.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: contents,
-      config: {
-        systemInstruction,
-        temperature: 0.85,
-      },
-    });
+    const { response, modelUsed } = await callGeminiWithRetryAndFallback(client, contents, systemInstruction);
 
     res.setHeader("Content-Type", "application/json");
     return res.status(200).json({
-      text: response.text || ""
+      text: response.text || "",
+      modelUsed
     });
   } catch (error: any) {
     console.error("Gemini API Error:", error);
