@@ -65,6 +65,7 @@ export default function App() {
   const [workspaceUser, setWorkspaceUser] = useState<any | null>(null);
   const [workspaceAuthNeedsClick, setWorkspaceAuthNeedsClick] = useState<boolean>(false);
   const [workspaceAuthLoading, setWorkspaceAuthLoading] = useState<boolean>(false);
+  const [workspaceAuthError, setWorkspaceAuthError] = useState<string | null>(null);
   
   // Calendar States
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
@@ -306,6 +307,7 @@ export default function App() {
 
   const handleWorkspaceLogin = async () => {
     setWorkspaceAuthLoading(true);
+    setWorkspaceAuthError(null);
     try {
       const result = await googleSignIn();
       if (result) {
@@ -323,6 +325,16 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Google login failed:", err);
+      if (
+        err.code === "auth/popup-closed-by-user" || 
+        err.message?.includes("popup-closed-by-user") || 
+        err.message?.includes("closed-by-user") || 
+        err.message?.includes("popup")
+      ) {
+        setWorkspaceAuthError("IFRAME_POPUP_CLOSED");
+      } else {
+        setWorkspaceAuthError(err.message || String(err));
+      }
       handleShowNotification(`Connection failed: ${err.message || err}`);
     } finally {
       setWorkspaceAuthLoading(false);
@@ -2442,6 +2454,37 @@ export default function App() {
                   To view and manage your Google Workspace (Gmail or Calendar) directly inside JX AI, please authorize access to your Google account.
                 </p>
               </div>
+
+              {workspaceAuthError && (
+                <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-left space-y-3 text-xs">
+                  {workspaceAuthError === "IFRAME_POPUP_CLOSED" ? (
+                    <>
+                      <p className="font-bold text-red-400 flex items-center gap-1.5">
+                        <span className="text-sm">⚠️</span> Iframe Popup Blocked / Closed
+                      </p>
+                      <p className="text-zinc-300 leading-relaxed text-[11px]">
+                        Google Sign-In requires a separate popup. Since the JX AI app is currently running inside the AI Studio preview iframe, browser policies blocked or closed the login popup automatically.
+                      </p>
+                      <div className="p-3 bg-zinc-950/40 rounded-xl border border-zinc-800/60 text-[11px] space-y-1.5 text-zinc-300 leading-relaxed font-sans">
+                        <p className="font-bold text-zinc-200">🛠️ समाधान (Solution):</p>
+                        <ol className="list-decimal pl-4 space-y-1">
+                          <li>Look at the top-right corner of your AI Studio screen.</li>
+                          <li>Click the <strong>'Open in new tab'</strong> (pop-out ↗️) icon next to the preview frame.</li>
+                          <li>Once the app is open in its own separate tab, click <strong>'Connect with Google'</strong> again. It will work flawlessly!</li>
+                        </ol>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold text-red-400">Connection Failed</p>
+                      <p className="text-zinc-300 leading-relaxed text-[11px] font-mono">
+                        {workspaceAuthError}
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
               <button
                 onClick={handleWorkspaceLogin}
                 disabled={workspaceAuthLoading}
