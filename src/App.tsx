@@ -45,7 +45,10 @@ import {
   Activity,
   Database,
   Cpu,
-  Layers
+  Layers,
+  Users,
+  Lock,
+  Unlock
 } from "lucide-react";
 import { SUGGESTIONS, PRINCIPLES } from "./data";
 import { Message, Conversation, Attachment } from "./types";
@@ -67,7 +70,10 @@ import {
   saveUserConversation, 
   deleteUserConversation, 
   getUserConversations, 
-  transferUserConversations 
+  transferUserConversations,
+  registerUserInDirectory,
+  getAllUsersFromDirectory,
+  adminUpdateUserMetadata
 } from "./lib/firestoreService";
 import { 
   listCalendarEvents, 
@@ -195,6 +201,12 @@ export default function App() {
     { time: new Date().toLocaleTimeString(), type: "system", msg: "Gemini Imagen endpoint active at /api/generate-image with Bypass permissions." },
   ]);
 
+  // Developer Console Sub-Tabs & User Search
+  const [devSubTab, setDevSubTab] = useState<"admin" | "users" | "playground" | "settings">("admin");
+  const [usersSearchQuery, setUsersSearchQuery] = useState("");
+  const [directoryUsers, setDirectoryUsers] = useState<any[]>([]);
+  const [loadingUsersDirectory, setLoadingUsersDirectory] = useState(false);
+
   // PWA Install States
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -223,6 +235,14 @@ export default function App() {
           setUserEmail(user.email);
           localStorage.setItem("udgtp_profile_email", user.email);
         }
+        
+        // Sync user profile in Firebase users_directory securely
+        registerUserInDirectory(
+          user.uid,
+          user.email,
+          user.displayName || "Guest User",
+          user.isAnonymous
+        ).catch((err) => console.error("Auto-sync directory error:", err));
       },
       () => {
         setWorkspaceToken(null);
@@ -245,6 +265,32 @@ export default function App() {
       fetchRecentEmails();
     }
   }, [activeTab, workspaceToken]);
+
+  // Load User Directory for Developer User Management Panel
+  const fetchUsersDirectory = async () => {
+    setLoadingUsersDirectory(true);
+    try {
+      const users = await getAllUsersFromDirectory();
+      setDirectoryUsers(users);
+      setDevLogs((prev) => [
+        { time: new Date().toLocaleTimeString(), type: "success", msg: `Fetched ${users.length} registered user records from users_directory.` },
+        ...prev
+      ]);
+    } catch (err: any) {
+      setDevLogs((prev) => [
+        { time: new Date().toLocaleTimeString(), type: "error", msg: `Failed to fetch users directory: ${err.message}` },
+        ...prev
+      ]);
+    } finally {
+      setLoadingUsersDirectory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "developer" && isDeveloper) {
+      fetchUsersDirectory();
+    }
+  }, [activeTab, isDeveloper]);
 
   const fetchUpcomingEvents = async () => {
     if (!workspaceToken) return;
@@ -945,6 +991,11 @@ export default function App() {
 
   // Create a brand new empty chat session
   const handleNewChat = () => {
+    if (conversations.length >= 3 && !isDeveloper) {
+      setShowImagePremiumModal(true);
+      handleShowNotification("Conversation Limit: Free Members are limited to 3 active sessions. Upgrade to Developer to unlock Unlimited Chats.");
+      return;
+    }
     const newId = Math.random().toString(36).substring(7);
     const newConv: Conversation = {
       id: newId,
@@ -2968,6 +3019,18 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Hidden Developer Menu Shortcut */}
+            {isDeveloper && activeTab !== "developer" && (
+              <button
+                onClick={() => setActiveTab("developer")}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-black uppercase tracking-wider cursor-pointer hover:bg-emerald-500/20 transition-all shadow-[0_0_15px_rgba(16,185,129,0.1)] hover:scale-102"
+                title="Enter Hidden Developer Control Room"
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>🛡️ Dev Room</span>
+              </button>
+            )}
+
             {/* Network Badge Status */}
             {isOnline ? (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase tracking-wider">
@@ -4200,120 +4263,307 @@ export default function App() {
               </div>
             </div>
 
-            {/* Main Layout Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Left Column - Diagnostics & Analytics */}
-              <div className="lg:col-span-1 space-y-6">
-                
-                {/* System Diagnostics */}
-                <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
-                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
-                    <Activity className="w-4 h-4 text-emerald-400" />
-                    Diagnostics &amp; Latency
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-zinc-500 font-semibold">Server Gateway</span>
-                      <span className="text-emerald-400 font-bold font-mono">ONLINE (Port 3000)</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-zinc-500 font-semibold">Environment</span>
-                      <span className="text-zinc-300 font-bold font-mono uppercase">Production container</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-zinc-500 font-semibold">Premium Bypassing</span>
-                      <span className="text-emerald-400 font-bold font-mono">ACTIVE (100% Free)</span>
-                    </div>
-                    
-                    {/* Latency Tester */}
-                    <div className="pt-2">
-                      <button
-                        onClick={handleDevPing}
-                        disabled={devLatencyTesting}
-                        className="w-full py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs font-bold hover:bg-zinc-800 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
-                      >
-                        <Activity className={`w-3.5 h-3.5 text-emerald-400 ${devLatencyTesting ? "animate-spin" : ""}`} />
-                        <span>{devLatencyTesting ? "Pinging Server..." : "Run Connection Speed Test"}</span>
-                      </button>
+            {/* Developer Sub-Tabs Selector */}
+            <div className="flex border-b border-zinc-800/60 pb-1 gap-2 overflow-x-auto scrollbar-none">
+              {(["admin", "users", "playground", "settings"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setDevSubTab(tab)}
+                  className={`px-4 py-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                    devSubTab === tab
+                      ? "border-emerald-500 text-emerald-400 font-extrabold"
+                      : "border-transparent text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {tab === "admin" && "🛡️ Admin Console"}
+                  {tab === "users" && "👥 User Management"}
+                  {tab === "playground" && "🧪 LLM Playground"}
+                  {tab === "settings" && "⚙️ System Configuration"}
+                </button>
+              ))}
+            </div>
+
+            {/* Sub-Tab: Admin Console */}
+            {devSubTab === "admin" && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fadeIn">
+                {/* Left diagnostics column */}
+                <div className="lg:col-span-1 space-y-6">
+                  {/* System Diagnostics */}
+                  <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
+                      <Activity className="w-4 h-4 text-emerald-400" />
+                      Diagnostics &amp; Latency
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-500 font-semibold">Server Gateway</span>
+                        <span className="text-emerald-400 font-bold font-mono">ONLINE (Port 3000)</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-500 font-semibold">Environment</span>
+                        <span className="text-zinc-300 font-bold font-mono uppercase">Production container</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-zinc-500 font-semibold">Premium Bypassing</span>
+                        <span className="text-emerald-400 font-bold font-mono">ACTIVE (100% Free)</span>
+                      </div>
                       
-                      {devLatency !== null && (
-                        <div className="mt-2.5 p-3 rounded-xl bg-zinc-950/60 border border-zinc-900 text-center">
-                          <span className="text-[10px] text-zinc-500 font-mono block">RESPONSE LATENCY</span>
-                          <span className="text-2xl font-black text-emerald-400 font-mono">{devLatency} ms</span>
-                          <span className="text-[10px] text-zinc-500 font-mono block mt-1">
-                            {devLatency < 150 ? "⚡ Extremely Fast Connection" : devLatency < 400 ? "🟢 Standard Server Speed" : "🟡 Minor Latency Detected"}
+                      {/* Connection speed tester */}
+                      <div className="pt-2">
+                        <button
+                          onClick={handleDevPing}
+                          disabled={devLatencyTesting}
+                          className="w-full py-2 px-3 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-200 text-xs font-bold hover:bg-zinc-800 hover:text-white transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Activity className={`w-3.5 h-3.5 text-emerald-400 ${devLatencyTesting ? "animate-spin" : ""}`} />
+                          <span>{devLatencyTesting ? "Pinging Server..." : "Run Connection Speed Test"}</span>
+                        </button>
+                        
+                        {devLatency !== null && (
+                          <div className="mt-2.5 p-3 rounded-xl bg-zinc-950/60 border border-zinc-900 text-center">
+                            <span className="text-[10px] text-zinc-500 font-mono block">RESPONSE LATENCY</span>
+                            <span className="text-2xl font-black text-emerald-400 font-mono">{devLatency} ms</span>
+                            <span className="text-[10px] text-zinc-500 font-mono block mt-1">
+                              {devLatency < 150 ? "⚡ Extremely Fast Connection" : devLatency < 400 ? "🟢 Standard Server Speed" : "🟡 Minor Latency Detected"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quota analytics box */}
+                  <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
+                      <Database className="w-4 h-4 text-emerald-400" />
+                      Storage &amp; Quota Analytics
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-zinc-400 font-semibold">Local Sessions Cache</span>
+                          <span className="text-zinc-300 font-bold font-mono">{conversations.length} / Unlimited</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-900">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, (conversations.length / 20) * 100)}%` }} />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-zinc-400 font-semibold">Weekly API Requests limit</span>
+                          <span className="text-zinc-300 font-bold font-mono">Bypassed</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-900">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: "100%" }} />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-zinc-400 font-semibold">Image Generation Quota</span>
+                          <span className="text-emerald-400 font-bold font-mono">UNLIMITED (Developer)</span>
+                        </div>
+                        <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-900">
+                          <div className="h-full bg-emerald-500 rounded-full" style={{ width: "100%" }} />
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-zinc-950/45 border border-zinc-900 space-y-1">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono">Workspace Connection</span>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${workspaceToken ? "bg-blue-400 animate-pulse" : "bg-zinc-600"}`} />
+                          <span className="text-xs text-zinc-300 font-medium">
+                            {workspaceToken ? "Workspace API Connected" : "Workspace Standby"}
                           </span>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Database & Quotas Stats */}
-                <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
-                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
-                    <Database className="w-4 h-4 text-emerald-400" />
-                    Storage &amp; Quota Analytics
-                  </h3>
-                  <div className="space-y-4">
-                    {/* Active Conversations bar */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-zinc-400 font-semibold">Local Sessions Cache</span>
-                        <span className="text-zinc-300 font-bold font-mono">{conversations.length} / Unlimited</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-900">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, (conversations.length / 20) * 100)}%` }} />
-                      </div>
-                    </div>
-
-                    {/* Firestore Writes simulation */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-zinc-400 font-semibold">Weekly API Requests limit</span>
-                        <span className="text-zinc-300 font-bold font-mono">Bypassed</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-900">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: "100%" }} />
-                      </div>
-                    </div>
-
-                    {/* Image Generation limits */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px]">
-                        <span className="text-zinc-400 font-semibold">Image Generation Quota</span>
-                        <span className="text-emerald-400 font-bold font-mono">UNLIMITED (Developer)</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-zinc-950 rounded-full overflow-hidden border border-zinc-900">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: "100%" }} />
-                      </div>
-                    </div>
-
-                    {/* Google Workspace Client Config */}
-                    <div className="p-3 rounded-xl bg-zinc-950/40 border border-zinc-900/60 space-y-1">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono">Workspace Connection</span>
-                      <div className="flex items-center gap-1.5 mt-1">
-                        <span className={`w-1.5 h-1.5 rounded-full ${workspaceToken ? "bg-blue-400 animate-pulse" : "bg-zinc-600"}`} />
-                        <span className="text-xs text-zinc-300 font-medium">
-                          {workspaceToken ? "Workspace API Connected" : "Workspace Standby"}
-                        </span>
                       </div>
                     </div>
                   </div>
                 </div>
 
+                {/* Right console logs column */}
+                <div className="lg:col-span-2 space-y-6">
+                  <div className={`p-5 rounded-2xl border ${cardClass} flex flex-col h-full space-y-4 min-h-[350px]`}>
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
+                      <Layers className="w-4 h-4 text-emerald-400" />
+                      Developer Terminal Logs
+                    </h3>
+                    <p className="text-xs text-zinc-400 leading-relaxed">
+                      Observe authorized database triggers, security checks, and backend communication logs below:
+                    </p>
+                    
+                    <div className="flex-1 bg-black/90 rounded-xl border border-zinc-900 p-4 font-mono text-[10px] text-zinc-400 space-y-1.5 overflow-y-auto leading-relaxed max-h-[380px] scrollbar-thin scrollbar-thumb-zinc-900">
+                      {devLogs.map((log, idx) => (
+                        <div key={idx} className="flex gap-2.5">
+                          <span className="text-zinc-600 shrink-0">[{log.time}]</span>
+                          <span className={`shrink-0 uppercase font-bold text-[8px] px-1.5 py-0.5 rounded ${
+                            log.type === "success" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
+                            log.type === "error" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
+                            log.type === "system" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : "bg-zinc-800 border border-zinc-700/50 text-zinc-400"
+                          }`}>
+                            {log.type}
+                          </span>
+                          <span className="flex-1 text-zinc-300 break-all">{log.msg}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Middle & Right Column: Prompt tester playground */}
-              <div className="lg:col-span-2 space-y-6">
-                
-                {/* Prompt Testing Arena */}
+            {/* Sub-Tab: User Management */}
+            {devSubTab === "users" && (
+              <div className="space-y-4 animate-fadeIn">
+                <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+                  {/* Search and stats bar */}
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                    <input
+                      type="text"
+                      placeholder="Search registered users by name, email or uid..."
+                      value={usersSearchQuery}
+                      onChange={(e) => setUsersSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 rounded-xl border text-xs bg-zinc-950 border-zinc-800 text-zinc-300"
+                    />
+                  </div>
+                  <button
+                    onClick={fetchUsersDirectory}
+                    disabled={loadingUsersDirectory}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 text-xs font-bold border border-zinc-800 transition-all flex items-center justify-center gap-2 cursor-pointer whitespace-nowrap"
+                  >
+                    <RotateCcw className={`w-3.5 h-3.5 text-emerald-400 ${loadingUsersDirectory ? "animate-spin" : ""}`} />
+                    <span>Refresh List</span>
+                  </button>
+                </div>
+
+                {/* Users list box */}
+                <div className={`rounded-2xl border ${cardClass} overflow-hidden`}>
+                  <div className="p-4 bg-zinc-950/50 border-b border-zinc-800 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                        <Users className="w-4 h-4 text-emerald-400" />
+                        Users Directory ({directoryUsers.length} total)
+                      </h3>
+                    </div>
+                    <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono font-bold uppercase">
+                      Secure System Derived Roles
+                    </span>
+                  </div>
+
+                  {loadingUsersDirectory ? (
+                    <div className="py-16 text-center space-y-3">
+                      <RotateCcw className="w-8 h-8 text-emerald-400 animate-spin mx-auto" />
+                      <p className="text-xs text-zinc-500 font-mono">Loading registered user profiles from Firestore...</p>
+                    </div>
+                  ) : directoryUsers.length === 0 ? (
+                    <div className="py-16 text-center space-y-2">
+                      <Users className="w-10 h-10 text-zinc-700 mx-auto" />
+                      <p className="text-sm font-semibold text-zinc-400">No users found</p>
+                      <p className="text-xs text-zinc-600 font-mono">Run dynamic operations to register new users.</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-800 bg-zinc-950/20 text-zinc-500 font-semibold">
+                            <th className="p-4">User Details</th>
+                            <th className="p-4">UID Reference</th>
+                            <th className="p-4">Authentication Type</th>
+                            <th className="p-4">Secure Derived Role</th>
+                            <th className="p-4 text-right font-mono">Last Login</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-850/40">
+                          {directoryUsers
+                            .filter((u) => {
+                              const q = usersSearchQuery.toLowerCase();
+                              return (
+                                (u.displayName || "").toLowerCase().includes(q) ||
+                                (u.email || "").toLowerCase().includes(q) ||
+                                (u.uid || "").toLowerCase().includes(q)
+                              );
+                            })
+                            .map((u) => {
+                              const isUserDev = u.email === "prathamjangra37@gmail.com";
+                              return (
+                                <tr key={u.uid} className="hover:bg-zinc-900/25 transition-colors">
+                                  <td className="p-4 flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs uppercase text-zinc-200 border ${
+                                      isUserDev 
+                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" 
+                                        : u.isAnonymous 
+                                          ? "bg-zinc-800/40 border-zinc-700/40 text-zinc-400"
+                                          : "bg-blue-500/10 border-blue-500/30 text-blue-400"
+                                    }`}>
+                                      {(u.displayName || "U").charAt(0)}
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-zinc-200">{u.displayName || "Guest User"}</p>
+                                      <p className="text-[10px] text-zinc-500 font-mono leading-none mt-0.5">{u.email}</p>
+                                    </div>
+                                  </td>
+                                  <td className="p-4 font-mono text-[10px] text-zinc-500 select-all max-w-[120px] truncate" title={u.uid}>
+                                    {u.uid}
+                                  </td>
+                                  <td className="p-4">
+                                    {u.isAnonymous ? (
+                                      <span className="text-[10px] bg-zinc-800 text-zinc-400 border border-zinc-700/50 px-2 py-0.5 rounded font-semibold uppercase">
+                                        Anonymous Guest
+                                      </span>
+                                    ) : u.email && u.email.endsWith("@gmail.com") ? (
+                                      <span className="text-[10px] bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded font-semibold uppercase">
+                                        Google OAuth
+                                      </span>
+                                    ) : (
+                                      <span className="text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded font-semibold uppercase">
+                                        Email / Password
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-4">
+                                    {isUserDev ? (
+                                      <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                                        <Unlock className="w-2.5 h-2.5" />
+                                        Developer
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-[10px] bg-zinc-800/60 text-zinc-400 border border-zinc-700 px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider">
+                                        <Lock className="w-2.5 h-2.5 text-zinc-500" />
+                                        Member
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="p-4 text-right text-zinc-500 font-mono text-[11px]">
+                                    {u.lastLogin && typeof u.lastLogin.toDate === "function" 
+                                      ? u.lastLogin.toDate().toLocaleString() 
+                                      : u.lastLogin && u.lastLogin.seconds 
+                                        ? new Date(u.lastLogin.seconds * 1000).toLocaleString()
+                                        : String(u.lastLogin || "N/A")}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab: LLM Playground */}
+            {devSubTab === "playground" && (
+              <div className="space-y-6 animate-fadeIn">
                 <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
                     <Cpu className="w-4 h-4 text-emerald-400" />
                     LLM Prompt Tester &amp; Debugger
                   </h3>
+                  <p className="text-xs text-zinc-400">
+                    Directly interact with the underlying Gemini LLM API as Developer to test system prompts, temperatures, and custom directives.
+                  </p>
                   
                   <div className="space-y-4">
                     {/* Settings row */}
@@ -4324,7 +4574,7 @@ export default function App() {
                         <select
                           value={devModel}
                           onChange={(e) => setDevModel(e.target.value)}
-                          className={`w-full p-2.5 rounded-xl border text-xs bg-zinc-950 border-zinc-800 text-zinc-300 font-mono`}
+                          className="w-full p-2.5 rounded-xl border text-xs bg-zinc-950 border-zinc-800 text-zinc-300 font-mono"
                         >
                           <option value="gemini-3.5-flash">gemini-3.5-flash (Standard Faster)</option>
                           <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Deeper Logic)</option>
@@ -4357,7 +4607,7 @@ export default function App() {
                         type="text"
                         value={devSystemInstruction}
                         onChange={(e) => setDevSystemInstruction(e.target.value)}
-                        className={`w-full p-2.5 rounded-xl border text-xs font-sans bg-zinc-950 border-zinc-800 text-zinc-300`}
+                        className="w-full p-2.5 rounded-xl border text-xs font-sans bg-zinc-950 border-zinc-800 text-zinc-300"
                         placeholder="Define system guidelines for the agent..."
                       />
                     </div>
@@ -4369,7 +4619,7 @@ export default function App() {
                         value={devPrompt}
                         onChange={(e) => setDevPrompt(e.target.value)}
                         rows={3}
-                        className={`w-full p-3 rounded-xl border text-xs font-sans bg-zinc-950 border-zinc-800 text-zinc-300 leading-relaxed`}
+                        className="w-full p-3 rounded-xl border text-xs font-sans bg-zinc-950 border-zinc-800 text-zinc-300 leading-relaxed"
                         placeholder="Write prompt test payload..."
                       />
                     </div>
@@ -4399,34 +4649,77 @@ export default function App() {
                     )}
                   </div>
                 </div>
+              </div>
+            )}
 
-                {/* Operations Terminal Logs */}
-                <div className={`p-5 rounded-2xl border ${cardClass} space-y-3`}>
+            {/* Sub-Tab: System Configuration */}
+            {devSubTab === "settings" && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
-                    <Layers className="w-4 h-4 text-emerald-400" />
-                    Admin Session Terminal Console Logs
+                    <SettingsIcon className="w-4 h-4 text-emerald-400" />
+                    Developer Bypass &amp; Simulator
                   </h3>
-                  
-                  <div className="bg-black/80 rounded-xl border border-zinc-900 p-4 font-mono text-[10px] text-zinc-400 space-y-1.5 max-h-[160px] overflow-y-auto leading-relaxed scrollbar-thin scrollbar-thumb-zinc-900">
-                    {devLogs.map((log, idx) => (
-                      <div key={idx} className="flex gap-2.5">
-                        <span className="text-zinc-600 shrink-0">[{log.time}]</span>
-                        <span className={`shrink-0 uppercase font-bold text-[8px] px-1 py-0.2 rounded ${
-                          log.type === "success" ? "bg-emerald-500/10 text-emerald-400" :
-                          log.type === "error" ? "bg-red-500/10 text-red-400" :
-                          log.type === "system" ? "bg-blue-500/10 text-blue-400" : "bg-zinc-800 text-zinc-400"
-                        }`}>
-                          {log.type}
+                  <p className="text-xs text-zinc-400">
+                    Simulate alternative environments and customize local storage cache for secure end-to-end integration testing.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
+                      <span className="text-xs font-bold text-zinc-200 block">✦ Free Tier Limit Simulation</span>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        Standard free accounts are limited to 3 active chats. Since you are Developer, this limit is automatically bypassed.
+                      </p>
+                      <div className="pt-2 flex items-center justify-between">
+                        <span className="text-xs text-zinc-400 font-semibold font-mono">Bypass Status</span>
+                        <span className="text-xs font-bold font-mono text-emerald-400 uppercase bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">
+                          ENABLED (Bypassed)
                         </span>
-                        <span className="flex-1 text-zinc-300 break-all">{log.msg}</span>
                       </div>
-                    ))}
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
+                      <span className="text-xs font-bold text-zinc-200 block">✦ Developer Mode Status</span>
+                      <p className="text-[11px] text-zinc-500 leading-relaxed">
+                        Any email exactly matching <strong className="text-zinc-400 font-mono">prathamjangra37@gmail.com</strong> is dynamically assigned the secure <strong className="text-emerald-400 font-mono">Developer</strong> role.
+                      </p>
+                      <div className="pt-2 flex items-center justify-between">
+                        <span className="text-xs text-zinc-400 font-semibold font-mono">Active Role</span>
+                        <span className="text-xs font-bold font-mono text-emerald-400 uppercase bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">
+                          🛡️ Developer (Admin)
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-zinc-800 flex flex-wrap gap-3">
+                    <button
+                      onClick={() => {
+                        if (window.confirm("Do you want to reset developer logs?")) {
+                          setDevLogs([
+                            { time: new Date().toLocaleTimeString(), type: "info", msg: "Developer match authorized securely: prathamjangra37@gmail.com" },
+                            { time: new Date().toLocaleTimeString(), type: "success", msg: "Firebase Authentication context synced with developer role." }
+                          ]);
+                          handleShowNotification("Developer logs cleared.");
+                        }
+                      }}
+                      className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 cursor-pointer"
+                    >
+                      Clear Dev Logs
+                    </button>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(JSON.stringify(currentUser, null, 2));
+                        handleShowNotification("Copied raw Auth Context object.");
+                      }}
+                      className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-800 cursor-pointer"
+                    >
+                      Copy Raw Auth Context
+                    </button>
                   </div>
                 </div>
-
               </div>
-
-            </div>
+            )}
           </div>
         )}
 
@@ -4479,30 +4772,26 @@ export default function App() {
                     <span>Stop Generating</span>
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (isDeveloper) {
+                  isDeveloper && (
+                    <button
+                      type="button"
+                      onClick={() => {
                         setIsGenerateImageMode((prev) => !prev);
-                      } else {
-                        setShowImagePremiumModal(true);
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                      isGenerateImageMode 
-                        ? "border-blue-500/40 bg-blue-600/10 text-blue-400" 
-                        : "border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
-                    }`}
-                    title={isDeveloper ? "Toggle AI Image Generation Mode" : "एआई इमेज जनरेशन के लिए भुगतान वाली कुंजी आवश्यक है (Paid key required for AI Image Generation)"}
-                  >
-                    <Sparkles className={`w-3.5 h-3.5 ${isGenerateImageMode ? "text-blue-400 animate-pulse" : "text-zinc-500"}`} />
-                    <span>{isGenerateImageMode ? "Generate Image Active" : "Generate Image Mode"}</span>
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-                      isDeveloper ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-zinc-800 text-amber-500"
-                    }`}>
-                      {isDeveloper ? "Dev Bypass" : "Paid"}
-                    </span>
-                  </button>
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                        isGenerateImageMode 
+                          ? "border-blue-500/40 bg-blue-600/10 text-blue-400" 
+                          : "border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60"
+                      }`}
+                      title="Toggle AI Image Generation Mode"
+                    >
+                      <Sparkles className={`w-3.5 h-3.5 ${isGenerateImageMode ? "text-blue-400 animate-pulse" : "text-zinc-500"}`} />
+                      <span>{isGenerateImageMode ? "Generate Image Active" : "Generate Image Mode"}</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Dev Bypass
+                      </span>
+                    </button>
+                  )
                 )}
 
                 {/* Regenerate Response button when model completed */}
