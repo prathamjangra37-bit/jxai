@@ -46,7 +46,23 @@ import { Message, Conversation, Attachment } from "./types";
 import { MarkdownView } from "./components/MarkdownView";
 import { TypewriterView } from "./components/TypewriterView";
 import { motion, AnimatePresence } from "motion/react";
-import { initAuth, googleSignIn, logout, emailSignUp, emailSignIn } from "./lib/firebaseAuth";
+import { 
+  initAuth, 
+  googleSignIn, 
+  logout, 
+  emailSignUp, 
+  emailSignIn,
+  guestSignIn,
+  linkGuestToGoogle,
+  sendPhoneOTP,
+  auth
+} from "./lib/firebaseAuth";
+import { 
+  saveUserConversation, 
+  deleteUserConversation, 
+  getUserConversations, 
+  transferUserConversations 
+} from "./lib/firestoreService";
 import { 
   listCalendarEvents, 
   createCalendarEvent, 
@@ -71,13 +87,20 @@ export default function App() {
 
   // General Firebase Auth States
   const [currentUser, setCurrentUser] = useState<any | null>(null);
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authMode, setAuthMode] = useState<"signin" | "signup" | "phone">("signin");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authConfirmPassword, setAuthConfirmPassword] = useState("");
   const [authDisplayName, setAuthDisplayName] = useState("");
   const [appAuthError, setAppAuthError] = useState<string | null>(null);
   const [appAuthLoading, setAppAuthLoading] = useState<boolean>(false);
+
+  // Phone OTP States
+  const [phoneStep, setPhoneStep] = useState<"enter-phone" | "enter-otp">("enter-phone");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [otpCode, setOtpCode] = useState("");
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+  const recaptchaVerifierRef = useRef<any>(null);
   
   // Calendar States
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
@@ -470,6 +493,155 @@ export default function App() {
     }
   };
 
+  const handleGuestSignIn = async () => {
+    setAppAuthLoading(true);
+    setAppAuthError(null);
+    try {
+      const user = await guestSignIn();
+      setCurrentUser(user);
+      setUserName("Guest User");
+      setUserEmail("guest@jxai.local");
+      handleShowNotification("Signed in successfully as Guest!");
+    } catch (err: any) {
+      console.error("Guest login failed:", err);
+      let msg = err.message || String(err);
+      if (err.code === "auth/unauthorized-domain" || err.message?.includes("unauthorized-domain")) {
+        msg = "Unauthorized Domain: This URL is not added to Firebase Authorized Domains. Please add this host (or localhost) in Firebase Auth Settings -> Authorized Domains.";
+      }
+      setAppAuthError(msg);
+    } finally {
+      setAppAuthLoading(false);
+    }
+  };
+
+  const [isLinkingLoading, setIsLinkingLoading] = useState(false);
+
+  const handleLinkToGoogle = async () => {
+    setIsLinkingLoading(true);
+    try {
+      const result = await linkGuestToGoogle();
+      if (result) {
+        setWorkspaceToken(result.accessToken);
+        setWorkspaceUser(result.user);
+        setCurrentUser(result.user);
+        if (result.user.displayName) setUserName(result.user.displayName);
+        if (result.user.email) setUserEmail(result.user.email);
+        handleShowNotification("Guest account successfully upgraded and linked with Google!");
+      }
+    } catch (err: any) {
+      console.error("Failed to link guest to Google:", err);
+      if (err.code === "auth/credential-already-in-use") {
+        const confirmMerge = window.confirm(
+          "This Google account is already registered as a JX AI user. Would you like to sign in to that Google account and merge your guest chat history into it?"
+        );
+        if (confirmMerge) {
+          try {
+            const guestUid = currentUser?.uid;
+            const loginResult = await googleSignIn();
+            if (loginResult) {
+              const googleUid = loginResult.user.uid;
+              if (guestUid && googleUid && guestUid !== googleUid) {
+                handleShowNotification("Merging guest conversations to your Google account...");
+                await transferUserConversations(guestUid, googleUid);
+              }
+              setWorkspaceToken(loginResult.accessToken);
+              setWorkspaceUser(loginResult.user);
+              setCurrentUser(loginResult.user);
+              if (loginResult.user.displayName) setUserName(loginResult.user.displayName);
+              if (loginResult.user.email) setUserEmail(loginResult.user.email);
+              handleShowNotification("Successfully logged in and merged guest history!");
+            }
+          } catch (mergeErr: any) {
+            console.error("Merge error:", mergeErr);
+            handleShowNotification(`Merge failed: ${mergeErr.message || mergeErr}`);
+          }
+        }
+      } else if (err.code === "auth/unauthorized-domain" || err.message?.includes("unauthorized-domain")) {
+        handleShowNotification("Domain not authorized in Firebase Console -> Auth -> Settings -> Authorized Domains.");
+      } else {
+        handleShowNotification(`Failed to link account: ${err.message || err}`);
+      }
+    } finally {
+      setIsLinkingLoading(false);
+    }
+  };
+
+  const handleSendPhoneOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!phoneNumber) {
+      setAppAuthError("Please enter a valid phone number.");
+      return;
+    }
+    setAppAuthLoading(true);
+    setAppAuthError(null);
+    try {
+      const { RecaptchaVerifier: RecaptchaVerifierClass } = await import("firebase/auth");
+      if (!recaptchaVerifierRef.current) {
+        recaptchaVerifierRef.current = new RecaptchaVerifierClass(auth, "recaptcha-container", {
+          size: "invisible",
+          callback: (response: any) => {
+            console.log("Invisible Recaptcha solved");
+          },
+          "expired-callback": () => {
+            setAppAuthError("reCAPTCHA expired. Please request the code again.");
+          }
+        });
+      }
+
+      const result = await sendPhoneOTP(phoneNumber, recaptchaVerifierRef.current);
+      setConfirmationResult(result);
+      setPhoneStep("enter-otp");
+      handleShowNotification("Verification code sent to your phone!");
+    } catch (err: any) {
+      console.error("Failed to send OTP:", err);
+      let msg = err.message || String(err);
+      if (err.code === "auth/invalid-phone-number" || err.message?.includes("invalid-phone-number")) {
+        msg = "Invalid phone number format. Please use E.164 format (e.g., +1234567890).";
+      } else if (err.code === "auth/unauthorized-domain" || err.message?.includes("unauthorized-domain")) {
+        msg = "Unauthorized Domain: This URL is not authorized in Firebase. Please add this domain to Firebase Console -> Auth -> Settings -> Authorized Domains.";
+      } else if (err.code === "auth/too-many-requests" || err.message?.includes("too-many-requests")) {
+        msg = "Too many OTP requests. Please try again later.";
+      }
+      setAppAuthError(msg);
+    } finally {
+      setAppAuthLoading(false);
+    }
+  };
+
+  const handleVerifyPhoneOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode) {
+      setAppAuthError("Please enter the 6-digit verification code.");
+      return;
+    }
+    setAppAuthLoading(true);
+    setAppAuthError(null);
+    try {
+      if (!confirmationResult) {
+        throw new Error("No confirmation session found. Please re-enter your phone number and request a code.");
+      }
+      const result = await confirmationResult.confirm(otpCode);
+      const user = result.user;
+      setCurrentUser(user);
+      if (user.phoneNumber) {
+        setUserName(`Phone User (${user.phoneNumber})`);
+        setUserEmail(`${user.uid.slice(0, 8)}@phone.jxai`);
+      }
+      handleShowNotification("Signed in successfully via Phone!");
+    } catch (err: any) {
+      console.error("Failed to verify OTP:", err);
+      let msg = err.message || String(err);
+      if (err.code === "auth/invalid-verification-code" || err.message?.includes("invalid-verification-code")) {
+        msg = "Incorrect verification code. Please check and try again.";
+      } else if (err.code === "auth/code-expired" || err.message?.includes("code-expired")) {
+        msg = "The verification code has expired. Please request a new one.";
+      }
+      setAppAuthError(msg);
+    } finally {
+      setAppAuthLoading(false);
+    }
+  };
+
   // Load state from LocalStorage on mount
   useEffect(() => {
     // 1. Theme loading
@@ -490,86 +662,7 @@ export default function App() {
       setUserName(savedProfileName);
     }
 
-    // 4. Conversations loading
-    const savedConversations = localStorage.getItem("udgtp_conversations_v3");
-    if (savedConversations) {
-      try {
-        const parsed = JSON.parse(savedConversations);
-        if (Array.isArray(parsed)) {
-          const loaded = parsed
-            .map((c: any) => {
-              if (!c || typeof c !== "object") return null;
-              return {
-                id: c.id || Math.random().toString(36).substring(7),
-                title: c.title || "Welcome Session",
-                createdAt: c.createdAt ? new Date(c.createdAt) : new Date(),
-                messages: Array.isArray(c.messages)
-                  ? c.messages
-                      .map((m: any) => {
-                        if (!m || typeof m !== "object") return null;
-                        return {
-                          id: m.id || Math.random().toString(36).substring(7),
-                          role: m.role || "user",
-                          content: m.content || "",
-                          timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-                          attachments: Array.isArray(m.attachments) ? m.attachments : undefined
-                        };
-                      })
-                      .filter(Boolean)
-                  : []
-              };
-            })
-            .filter(Boolean) as Conversation[];
-
-          if (loaded.length > 0) {
-            setConversations(loaded);
-            setActiveId(loaded[0].id);
-          } else {
-            const defaultId = Math.random().toString(36).substring(7);
-            const defaultConv: Conversation = {
-              id: defaultId,
-              title: "Welcome Session",
-              messages: [],
-              createdAt: new Date()
-            };
-            setConversations([defaultConv]);
-            setActiveId(defaultId);
-          }
-        } else {
-          const defaultId = Math.random().toString(36).substring(7);
-          const defaultConv: Conversation = {
-            id: defaultId,
-            title: "Welcome Session",
-            messages: [],
-            createdAt: new Date()
-          };
-          setConversations([defaultConv]);
-          setActiveId(defaultId);
-        }
-      } catch (e) {
-        console.error("Failed to load conversation history:", e);
-        const defaultId = Math.random().toString(36).substring(7);
-        const defaultConv: Conversation = {
-          id: defaultId,
-          title: "Welcome Session",
-          messages: [],
-          createdAt: new Date()
-        };
-        setConversations([defaultConv]);
-        setActiveId(defaultId);
-      }
-    } else {
-      // Create a default first conversation if empty
-      const defaultId = Math.random().toString(36).substring(7);
-      const defaultConv: Conversation = {
-        id: defaultId,
-        title: "Welcome Session",
-        messages: [],
-        createdAt: new Date()
-      };
-      setConversations([defaultConv]);
-      setActiveId(defaultId);
-    }
+    // Conversations loading is now handled dynamically from Firestore by the currentUser effect below.
 
     // Live clock update
     const updateTime = () => {
@@ -632,7 +725,89 @@ export default function App() {
     };
   }, []);
 
-  // Sync conversations to LocalStorage when changed
+  // Switch to or retrieve current conversation messages
+  const activeConversation = conversations.find((c) => c.id === activeId);
+  const messages = activeConversation ? activeConversation.messages : [];
+
+  // Load user's conversations from Firestore when currentUser changes
+  const [isConversationsLoading, setIsConversationsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const fetchUserChatHistory = async () => {
+      setIsConversationsLoading(true);
+      try {
+        const firestoreConvs = await getUserConversations(currentUser.uid);
+        if (firestoreConvs && firestoreConvs.length > 0) {
+          setConversations(firestoreConvs);
+          setActiveId(firestoreConvs[0].id);
+        } else {
+          // If no conversations exist in Firestore, check if there are local conversations
+          const savedConversations = localStorage.getItem("udgtp_conversations_v3");
+          if (savedConversations) {
+            try {
+              const parsed = JSON.parse(savedConversations);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const migrated = parsed.map((c: any) => ({
+                  id: c.id || Math.random().toString(36).substring(7),
+                  title: c.title || "Welcome Session",
+                  createdAt: c.createdAt ? new Date(c.createdAt) : new Date(),
+                  messages: (c.messages || []).map((m: any) => ({
+                    id: m.id || Math.random().toString(36).substring(7),
+                    role: m.role || "user",
+                    content: m.content || "",
+                    timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+                    attachments: m.attachments || []
+                  }))
+                })) as Conversation[];
+
+                for (const conv of migrated) {
+                  await saveUserConversation(currentUser.uid, conv);
+                }
+
+                setConversations(migrated);
+                setActiveId(migrated[0].id);
+                return;
+              }
+            } catch (err) {
+              console.error("Failed to parse local conversations for migration:", err);
+            }
+          }
+
+          // Otherwise, create a default welcome session
+          const defaultId = Math.random().toString(36).substring(7);
+          const defaultConv: Conversation = {
+            id: defaultId,
+            title: "Welcome Session",
+            messages: [],
+            createdAt: new Date()
+          };
+          await saveUserConversation(currentUser.uid, defaultConv);
+          setConversations([defaultConv]);
+          setActiveId(defaultId);
+        }
+      } catch (err) {
+        console.error("Failed to load user conversations from Firestore:", err);
+      } finally {
+        setIsConversationsLoading(false);
+      }
+    };
+
+    fetchUserChatHistory();
+  }, [currentUser]);
+
+  // Save active conversation to Firestore whenever it changes
+  useEffect(() => {
+    if (!currentUser || isConversationsLoading) return;
+    if (!activeConversation) return;
+
+    saveUserConversation(currentUser.uid, activeConversation).catch((err) => {
+      console.error("Error auto-saving active conversation to Firestore:", err);
+    });
+  }, [conversations, activeId, currentUser, isConversationsLoading, activeConversation]);
+
+  // Sync conversations to LocalStorage when changed (as backup)
   useEffect(() => {
     if (conversations.length > 0) {
       localStorage.setItem("udgtp_conversations_v3", JSON.stringify(conversations));
@@ -645,10 +820,6 @@ export default function App() {
   const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
-
-  // Switch to or retrieve current conversation messages
-  const activeConversation = conversations.find((c) => c.id === activeId);
-  const messages = activeConversation ? activeConversation.messages : [];
 
   // Filter conversations based on search query (searches title or individual message content)
   const filteredConversations = conversations.filter((conv) => {
@@ -699,18 +870,22 @@ export default function App() {
   };
 
   // Delete a specific conversation session
-  const handleDeleteSession = (id: string, e: React.MouseEvent) => {
+  const handleDeleteSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (conversations.length <= 1) {
       // Just clear current messages instead of deleting the last session
-      setConversations([{
+      const clearedSession = {
         id: activeId,
         title: "New Session",
         messages: [],
         createdAt: new Date()
-      }]);
+      };
+      setConversations([clearedSession]);
       setError(null);
       handleShowNotification("Cleared conversation messages.");
+      if (currentUser) {
+        await saveUserConversation(currentUser.uid, clearedSession);
+      }
       return;
     }
 
@@ -720,6 +895,13 @@ export default function App() {
       setActiveId(filtered[0].id);
     }
     handleShowNotification("Deleted conversation session.");
+    if (currentUser) {
+      try {
+        await deleteUserConversation(currentUser.uid, id);
+      } catch (err) {
+        console.error("Failed to delete session from Firestore:", err);
+      }
+    }
   };
 
   // Stop current AI Response Generation
@@ -1645,33 +1827,40 @@ export default function App() {
   }
 
   if (!currentUser) {
+    const isDomainError = appAuthError?.toLowerCase().includes("unauthorized-domain") || appAuthError?.toLowerCase().includes("unauthorized domain");
+
     return (
-      <div className={`flex min-h-screen w-full items-center justify-center font-sans ${bgClass} p-4 md:p-6 overflow-y-auto`}>
-        <div className={`w-full max-w-md p-6 md:p-8 rounded-3xl border ${cardClass} shadow-2xl space-y-6 my-4`}>
+      <div className={`flex min-h-screen w-full items-center justify-center font-sans ${bgClass} p-4 md:p-8 overflow-y-auto`}>
+        {/* reCAPTCHA Invisible Element required for Phone Auth */}
+        <div id="recaptcha-container" className="hidden"></div>
+
+        <div className={`w-full max-w-md p-6 md:p-8 rounded-3xl border ${cardClass} shadow-2xl space-y-6 my-6 transition-all duration-300`}>
           
-          <div className="flex flex-col items-center text-center space-y-3">
-            <div className="w-14 h-14 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-white font-black text-xl shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+          <div className="flex flex-col items-center text-center space-y-2">
+            <div className="w-16 h-16 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-white font-black text-2xl shadow-[0_0_20px_rgba(59,130,246,0.15)] animate-pulse">
               J
             </div>
             <div className="space-y-1">
-              <h1 className="text-xl font-extrabold tracking-tight">Welcome to JX AI</h1>
-              <p className="text-[11px] text-zinc-400 leading-relaxed font-sans max-w-[280px] mx-auto">
-                Your comprehensive multi-session AI assistant with secure Google Workspace integrations.
+              <h1 className="text-2xl font-extrabold tracking-tight text-white bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                JX AI Workspace
+              </h1>
+              <p className="text-xs text-zinc-400 leading-relaxed font-sans max-w-[300px] mx-auto">
+                Secure multi-session assistant with advanced cloud memory, voice commands, and Google Workspace.
               </p>
             </div>
           </div>
 
-          {/* Tab Switcher */}
-          <div className="flex p-1 rounded-xl bg-zinc-950/65 border border-zinc-800/80">
+          {/* Mode Tabs */}
+          <div className="grid grid-cols-3 p-1 rounded-xl bg-zinc-950/70 border border-zinc-800/80">
             <button
               type="button"
               onClick={() => {
                 setAuthMode("signin");
                 setAppAuthError(null);
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                 authMode === "signin"
-                  ? "bg-zinc-800 text-white shadow-sm"
+                  ? "bg-zinc-800 text-white shadow-md border border-zinc-700/55"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -1683,18 +1872,33 @@ export default function App() {
                 setAuthMode("signup");
                 setAppAuthError(null);
               }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
                 authMode === "signup"
-                  ? "bg-zinc-800 text-white shadow-sm"
+                  ? "bg-zinc-800 text-white shadow-md border border-zinc-700/55"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
               Sign Up
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("phone");
+                setAppAuthError(null);
+                setPhoneStep("enter-phone");
+              }}
+              className={`py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer ${
+                authMode === "phone"
+                  ? "bg-zinc-800 text-white shadow-md border border-zinc-700/55"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Phone OTP
+            </button>
           </div>
 
-          {/* Form Content */}
-          {authMode === "signin" ? (
+          {/* Form Pathways */}
+          {authMode === "signin" && (
             <form onSubmit={handleEmailSignIn} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Email Address</label>
@@ -1703,7 +1907,7 @@ export default function App() {
                   placeholder="you@example.com"
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
                   required
                 />
               </div>
@@ -1714,7 +1918,7 @@ export default function App() {
                   placeholder="••••••••"
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
                   required
                 />
               </div>
@@ -1728,11 +1932,11 @@ export default function App() {
               <button
                 type="submit"
                 disabled={appAuthLoading}
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {appAuthLoading ? (
                   <>
-                    <span className="w-4 h-4 rounded-full border-2 border-t-white animate-spin" />
+                    <span className="w-4 h-4 rounded-full border-2 border-t-white border-zinc-600 animate-spin" />
                     <span>Signing In...</span>
                   </>
                 ) : (
@@ -1740,7 +1944,9 @@ export default function App() {
                 )}
               </button>
             </form>
-          ) : (
+          )}
+
+          {authMode === "signup" && (
             <form onSubmit={handleEmailSignUp} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Full Name</label>
@@ -1749,7 +1955,7 @@ export default function App() {
                   placeholder="Your Name"
                   value={authDisplayName}
                   onChange={(e) => setAuthDisplayName(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
                   required
                 />
               </div>
@@ -1760,7 +1966,7 @@ export default function App() {
                   placeholder="you@example.com"
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
                   required
                 />
               </div>
@@ -1768,10 +1974,10 @@ export default function App() {
                 <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Password</label>
                 <input
                   type="password"
-                  placeholder="•••••••• (Min 6 chars)"
+                  placeholder="•••••••• (Min 6 characters)"
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
                   required
                 />
               </div>
@@ -1782,7 +1988,7 @@ export default function App() {
                   placeholder="••••••••"
                   value={authConfirmPassword}
                   onChange={(e) => setAuthConfirmPassword(e.target.value)}
-                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
                   required
                 />
               </div>
@@ -1796,11 +2002,11 @@ export default function App() {
               <button
                 type="submit"
                 disabled={appAuthLoading}
-                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {appAuthLoading ? (
                   <>
-                    <span className="w-4 h-4 rounded-full border-2 border-t-white animate-spin" />
+                    <span className="w-4 h-4 rounded-full border-2 border-t-white border-zinc-600 animate-spin" />
                     <span>Creating Account...</span>
                   </>
                 ) : (
@@ -1810,69 +2016,194 @@ export default function App() {
             </form>
           )}
 
+          {authMode === "phone" && (
+            <div className="space-y-4">
+              {phoneStep === "enter-phone" ? (
+                <form onSubmit={handleSendPhoneOTP} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Phone Number (E.164 Format)</label>
+                    <input
+                      type="tel"
+                      placeholder="+1 555-019-2834"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
+                      required
+                    />
+                    <p className="text-[10px] text-zinc-500">Include country code prefix (e.g. +91 for India, +1 for US).</p>
+                  </div>
+
+                  {appAuthError && (
+                    <div className="p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400 text-left leading-relaxed">
+                      {isDomainError ? (
+                        <div className="space-y-2">
+                          <p className="font-bold">🌐 Domain Not Authorized</p>
+                          <p className="text-[11px] text-zinc-300">
+                            Firebase Authentication has blocked this sign-in attempt because this development URL is not yet listed in your Firebase authorized domains.
+                          </p>
+                          <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-lg text-[10px] font-mono text-zinc-400 space-y-1">
+                            <p className="text-zinc-200">🛠️ Quick Fix:</p>
+                            <p>1. Open Firebase Console</p>
+                            <p>2. Go to Auth &rarr; Settings &rarr; Authorized Domains</p>
+                            <p>3. Add: <span className="text-blue-400 select-all">{window.location.hostname}</span></p>
+                          </div>
+                        </div>
+                      ) : (
+                        appAuthError
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={appAuthLoading}
+                    className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {appAuthLoading ? (
+                      <>
+                        <span className="w-4 h-4 rounded-full border-2 border-t-white border-zinc-600 animate-spin" />
+                        <span>Sending SMS Code...</span>
+                      </>
+                    ) : (
+                      <span>Send SMS Verification Code</span>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyPhoneOTP} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">6-Digit SMS Verification Code</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="123456"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl border text-center text-lg font-mono tracking-[0.5em] transition-all outline-none focus:ring-2 focus:ring-blue-500/20 ${inputBgClass}`}
+                      required
+                    />
+                    <p className="text-[10px] text-center text-zinc-500">Enter the OTP sent to your mobile device.</p>
+                  </div>
+
+                  {appAuthError && (
+                    <div className="p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400 text-left">
+                      {appAuthError}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhoneStep("enter-phone");
+                        setAppAuthError(null);
+                      }}
+                      className="flex-1 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold font-sans transition-all duration-150 cursor-pointer"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={appAuthLoading}
+                      className="flex-[2] py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-lg disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {appAuthLoading ? (
+                        <>
+                          <span className="w-4 h-4 rounded-full border-2 border-t-white border-zinc-600 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <span>Verify & Sign In</span>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
           {/* Social Divider */}
-          <div className="relative py-2">
+          <div className="relative py-1">
             <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-zinc-800/85"></div>
+              <div className="w-full border-t border-zinc-800/80"></div>
             </div>
             <div className="relative flex justify-center text-[10px] uppercase">
-              <span className={`${isDark ? 'bg-[#121215] text-zinc-500' : 'bg-white text-zinc-400'} px-3 font-bold tracking-wider`}>
+              <span className="bg-[#09090b] px-3 font-bold tracking-wider text-zinc-500">
                 or continue with
               </span>
             </div>
           </div>
 
-          {workspaceAuthError && (
-            <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-left space-y-3 text-xs">
-              {workspaceAuthError === "IFRAME_POPUP_CLOSED" ? (
-                <>
-                  <p className="font-bold text-red-400 flex items-center gap-1.5">
-                    <span className="text-sm">⚠️</span> Iframe Popup Blocked / Closed
-                  </p>
-                  <p className="text-zinc-300 leading-relaxed text-[11px]">
-                    Google Sign-In requires a separate popup. Since the JX AI app is currently running inside the AI Studio preview iframe, browser policies blocked or closed the login popup automatically.
-                  </p>
-                  <div className="p-3 bg-zinc-950/45 rounded-xl border border-zinc-800/65 text-[11px] space-y-1.5 text-zinc-300 leading-relaxed font-sans">
-                    <p className="font-bold text-zinc-200">🛠️ समाधान (Solution):</p>
-                    <ol className="list-decimal pl-4 space-y-1">
-                      <li>Look at the top-right corner of your AI Studio screen.</li>
-                      <li>Click the <strong>'Open in new tab'</strong> (pop-out ↗️) icon next to the preview frame.</li>
-                      <li>Once the app is open in its own separate tab, click <strong>'Sign In with Google'</strong> again. It will work flawlessly!</li>
-                    </ol>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <p className="font-bold text-red-400">Connection Failed</p>
-                  <p className="text-zinc-300 leading-relaxed text-[11px] font-mono">
-                    {workspaceAuthError}
-                  </p>
-                </>
-              )}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={handleWorkspaceLogin}
-            disabled={workspaceAuthLoading}
-            className="w-full py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {workspaceAuthLoading ? (
-              <>
-                <span className="w-4 h-4 rounded-full border-2 border-t-zinc-900 animate-spin" />
-                <span>Connecting Google...</span>
-              </>
-            ) : (
-              <>
-                <Globe className="w-4 h-4" />
-                <span>Sign In with Google</span>
-              </>
+          {/* Google Workspace & Guest Auth blocks */}
+          <div className="space-y-3">
+            {workspaceAuthError && (
+              <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-left space-y-3 text-xs leading-relaxed">
+                {workspaceAuthError === "IFRAME_POPUP_CLOSED" ? (
+                  <>
+                    <p className="font-bold text-red-400 flex items-center gap-1.5">
+                      <span className="text-sm">⚠️</span> Iframe Popup Blocked
+                    </p>
+                    <p className="text-zinc-300 text-[11px] leading-relaxed">
+                      Due to browser sandbox security policies inside the AI Studio preview iframe, popup dialogs are restricted.
+                    </p>
+                    <div className="p-3 bg-zinc-950/50 rounded-xl border border-zinc-800/70 text-[11px] space-y-1.5 text-zinc-300">
+                      <p className="font-bold text-zinc-200">🛠️ Solution:</p>
+                      <ol className="list-decimal pl-4 space-y-1">
+                        <li>Look at the top-right of your AI Studio environment.</li>
+                        <li>Click the <strong>'Open in new tab'</strong> (pop-out ↗️) icon.</li>
+                        <li>Once the app runs in its standalone tab, click <strong>'Sign In with Google'</strong> again. It will work flawlessly!</li>
+                      </ol>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-bold text-red-400">Connection Failed</p>
+                    <p className="text-zinc-300 text-[11px] font-mono">
+                      {workspaceAuthError}
+                    </p>
+                  </>
+                )}
+              </div>
             )}
-          </button>
+
+            {/* Social Authentication Row */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleWorkspaceLogin}
+                disabled={workspaceAuthLoading}
+                className="w-full py-3.5 px-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-950 text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {workspaceAuthLoading ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-t-zinc-950 border-zinc-300 animate-spin" />
+                ) : (
+                  <>
+                    <Globe className="w-4 h-4 text-zinc-950" />
+                    <span className="truncate">Google</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleGuestSignIn}
+                disabled={appAuthLoading}
+                className="w-full py-3.5 px-2 rounded-xl bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-100 text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {appAuthLoading ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-t-white border-zinc-700 animate-spin" />
+                ) : (
+                  <>
+                    <UserIcon className="w-4 h-4 text-zinc-300" />
+                    <span className="truncate">Guest (Anon)</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
           
           <p className="text-[10px] text-zinc-500 font-mono text-center">
-            Secure multi-session auth by Firebase
+            Fully resilient multi-channel memory. Securely powered by Firebase.
           </p>
         </div>
       </div>
@@ -2153,6 +2484,20 @@ export default function App() {
                 <p className="text-[10px] text-zinc-500 font-mono truncate mt-1">{userEmail}</p>
               </div>
             </div>
+            {currentUser?.isAnonymous && (
+              <button
+                onClick={handleLinkToGoogle}
+                disabled={isLinkingLoading}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold cursor-pointer transition-all bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 border border-blue-500/15"
+              >
+                {isLinkingLoading ? (
+                  <span className="w-4 h-4 rounded-full border-2 border-t-blue-400 border-zinc-800 animate-spin" />
+                ) : (
+                  <Globe className="w-4 h-4 text-blue-400 animate-pulse" />
+                )}
+                <span>Upgrade / Link Google</span>
+              </button>
+            )}
             <button
               onClick={handleAppLogout}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-all text-red-400 hover:text-red-300 hover:bg-red-500/10"
@@ -2427,6 +2772,23 @@ export default function App() {
                       <p className="text-[9px] text-zinc-500 font-mono truncate mt-0.5">{userEmail}</p>
                     </div>
                   </div>
+                  {currentUser?.isAnonymous && (
+                    <button
+                      onClick={() => {
+                        handleLinkToGoogle();
+                        setIsSidebarOpen(false);
+                      }}
+                      disabled={isLinkingLoading}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer transition-all bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 border border-blue-500/15"
+                    >
+                      {isLinkingLoading ? (
+                        <span className="w-3 h-3 rounded-full border-2 border-t-blue-400 border-zinc-800 animate-spin" />
+                      ) : (
+                        <Globe className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                      )}
+                      <span>Upgrade / Link Google</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       handleAppLogout();

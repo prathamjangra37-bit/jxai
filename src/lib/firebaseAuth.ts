@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps, getApp } from "firebase/app";
 import { 
   getAuth, 
   signInWithPopup, 
@@ -8,13 +8,20 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile
+  updateProfile,
+  signInAnonymously,
+  signInWithPhoneNumber,
+  RecaptchaVerifier,
+  linkWithPopup,
+  PhoneAuthProvider
 } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
-// Initialize Firebase App and Auth
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase App and Auth once
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 
 export const provider = new GoogleAuthProvider();
 
@@ -100,6 +107,51 @@ export const emailSignIn = async (email: string, password: string): Promise<User
 
 export const getAccessToken = async (): Promise<string | null> => {
   return cachedAccessToken;
+};
+
+// Continue as Guest (Anonymous Authentication)
+export const guestSignIn = async (): Promise<User> => {
+  try {
+    const result = await signInAnonymously(auth);
+    return result.user;
+  } catch (error: any) {
+    console.error("Anonymous login error:", error);
+    throw error;
+  }
+};
+
+// Link Anonymous Guest to Google Account
+export const linkGuestToGoogle = async (): Promise<{ user: User; accessToken: string }> => {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error("No guest user is currently signed in.");
+    
+    const result = await linkWithPopup(currentUser, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (!credential?.accessToken) {
+      throw new Error("Failed to get Google access token after linking.");
+    }
+    
+    cachedAccessToken = credential.accessToken;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("workspace_access_token", cachedAccessToken);
+    }
+    return { user: result.user, accessToken: cachedAccessToken };
+  } catch (error: any) {
+    console.error("Link guest to Google error:", error);
+    throw error;
+  }
+};
+
+// Send Phone OTP
+export const sendPhoneOTP = async (phoneNumber: string, recaptchaVerifier: any) => {
+  try {
+    const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier);
+    return confirmationResult;
+  } catch (error: any) {
+    console.error("Phone OTP send error:", error);
+    throw error;
+  }
 };
 
 export const logout = async () => {
