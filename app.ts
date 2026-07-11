@@ -373,6 +373,72 @@ app.get("/api/developer/ping", (req, res) => {
   });
 });
 
+// WhatsApp Chatbot Connection Status Check for Developer
+app.get("/api/developer/whatsapp/status", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  const userEmail = req.headers["x-user-email"] || req.query.email;
+
+  if (userEmail !== "prathamjangra37@gmail.com") {
+    return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
+  }
+
+  const tokenSet = !!process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneIdSet = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const verifyTokenSet = !!process.env.WHATSAPP_VERIFY_TOKEN;
+
+  let overallStatus = "disconnected";
+  if (tokenSet && phoneIdSet) {
+    overallStatus = "connected";
+  } else if (tokenSet || phoneIdSet) {
+    overallStatus = "partial";
+  }
+
+  return res.status(200).json({
+    status: overallStatus,
+    config: {
+      accessTokenSet: tokenSet,
+      phoneIdSet: phoneIdSet,
+      verifyTokenSet: verifyTokenSet,
+      verifyTokenValue: process.env.WHATSAPP_VERIFY_TOKEN || "jx_ai_whatsapp_token_2026"
+    },
+    timestamp: new Date()
+  });
+});
+
+// WhatsApp Chatbot Send Test Message for Developer
+app.post("/api/developer/whatsapp/test-message", async (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  const userEmail = req.headers["x-user-email"] || req.body.email;
+
+  if (userEmail !== "prathamjangra37@gmail.com") {
+    return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
+  }
+
+  const { toPhone, message } = req.body;
+  if (!toPhone) {
+    return res.status(400).json({ error: "Recipient phone number is required." });
+  }
+
+  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+
+  if (!phoneId || !accessToken) {
+    return res.status(400).json({ 
+      error: "WhatsApp Cloud API is not configured on the server. Please check your system secrets." 
+    });
+  }
+
+  try {
+    const textToSend = message || "Ram Ram! This is a secure test message from your JX AI Developer Control Room. 🚀";
+    console.log(`[Developer Test Message] Triggered test message to ${toPhone}`);
+    const result = await sendWhatsAppTextMessage(phoneId, toPhone, textToSend, accessToken);
+    return res.status(200).json({ success: true, result });
+  } catch (err: any) {
+    console.error("Developer Test Message Error:", err);
+    return res.status(500).json({ error: err.message || "Failed to deliver WhatsApp test message." });
+  }
+});
+
 // Store temporary media in a memory map so we can reference them with a stable real URL
 const mediaCache = new Map<string, { data: string; name: string; mimeType: string }>();
 

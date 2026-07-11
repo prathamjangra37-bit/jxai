@@ -48,7 +48,9 @@ import {
   Layers,
   Users,
   Lock,
-  Unlock
+  Unlock,
+  BookOpen,
+  RefreshCw
 } from "lucide-react";
 import { SUGGESTIONS, PRINCIPLES } from "./data";
 import { Message, Conversation, Attachment } from "./types";
@@ -207,6 +209,14 @@ export default function App() {
   const [directoryUsers, setDirectoryUsers] = useState<any[]>([]);
   const [loadingUsersDirectory, setLoadingUsersDirectory] = useState(false);
 
+  // WhatsApp Chatbot Developer states
+  const [whatsappStatus, setWhatsappStatus] = useState<any>(null);
+  const [loadingWhatsappStatus, setLoadingWhatsappStatus] = useState(false);
+  const [testRecipientPhone, setTestRecipientPhone] = useState("");
+  const [testMessageContent, setTestMessageContent] = useState("");
+  const [sendingTestMessage, setSendingTestMessage] = useState(false);
+  const [testMessageResult, setTestMessageResult] = useState<{ success: boolean; msg: string } | null>(null);
+
   // PWA Install States
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
@@ -291,6 +301,70 @@ export default function App() {
       fetchUsersDirectory();
     }
   }, [activeTab, isDeveloper]);
+
+  const fetchWhatsappStatus = async () => {
+    setLoadingWhatsappStatus(true);
+    try {
+      const response = await fetch("/api/developer/whatsapp/status", {
+        headers: {
+          "x-user-email": "prathamjangra37@gmail.com"
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setWhatsappStatus(data);
+      } else {
+        console.error("Failed to load WhatsApp status");
+      }
+    } catch (err) {
+      console.error("Error fetching WhatsApp status:", err);
+    } finally {
+      setLoadingWhatsappStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "developer" && isDeveloper && devSubTab === "whatsapp") {
+      fetchWhatsappStatus();
+    }
+  }, [activeTab, isDeveloper, devSubTab]);
+
+  const handleSendTestMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!testRecipientPhone) {
+      setTestMessageResult({ success: false, msg: "Recipient phone number is required!" });
+      return;
+    }
+    setSendingTestMessage(true);
+    setTestMessageResult(null);
+
+    try {
+      const response = await fetch("/api/developer/whatsapp/test-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-user-email": "prathamjangra37@gmail.com"
+        },
+        body: JSON.stringify({
+          toPhone: testRecipientPhone,
+          message: testMessageContent
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setTestMessageResult({ success: true, msg: "Test message sent successfully!" });
+        handleShowNotification("WhatsApp test message sent successfully!");
+        setTestMessageContent("");
+      } else {
+        setTestMessageResult({ success: false, msg: data.error || "Failed to deliver message." });
+      }
+    } catch (err: any) {
+      setTestMessageResult({ success: false, msg: err.message || "Network error occurred." });
+    } finally {
+      setSendingTestMessage(false);
+    }
+  };
 
   const fetchUpcomingEvents = async () => {
     if (!workspaceToken) return;
@@ -747,13 +821,13 @@ export default function App() {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      console.log("UDGTP can now be installed on this device!");
+      console.log("JX AI can now be installed on this device!");
     };
 
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
       setIsInstalled(true);
-      handleShowNotification("UDGTP has been successfully installed on your device!");
+      handleShowNotification("JX AI has been successfully installed on your device!");
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
@@ -913,10 +987,10 @@ export default function App() {
     try {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
-      console.log(`UDGTP Install prompt outcome: ${outcome}`);
+      console.log(`JX AI Install prompt outcome: ${outcome}`);
       setDeferredPrompt(null);
     } catch (err) {
-      console.error("UDGTP Install prompt error:", err);
+      console.error("JX AI Install prompt error:", err);
     }
   };
 
@@ -1960,9 +2034,12 @@ export default function App() {
     return (
       <div className={`flex flex-col items-center justify-center h-screen w-full font-sans ${bgClass}`}>
         <div className="space-y-4 text-center">
-          <div className="w-16 h-16 mx-auto rounded-3xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-white font-bold text-2xl shadow-[0_0_25px_rgba(255,255,255,0.08)]">
-            J
-          </div>
+          <img 
+            src="/favicon.png" 
+            alt="JX AI Logo" 
+            referrerPolicy="no-referrer"
+            className="w-16 h-16 mx-auto rounded-3xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] object-cover" 
+          />
           <div className="space-y-1 animate-pulse">
             <h1 className="text-sm font-bold tracking-tight text-zinc-300">Loading JX AI Workspace...</h1>
             <p className="text-[10px] text-zinc-500 font-mono">Initializing secure connection</p>
@@ -1986,9 +2063,12 @@ export default function App() {
         <div className={`w-full max-w-md p-6 md:p-8 rounded-3xl border ${cardClass} shadow-2xl space-y-6 my-6 transition-all duration-300`}>
           
           <div className="flex flex-col items-center text-center space-y-2">
-            <div className="w-16 h-16 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-white font-black text-2xl shadow-[0_0_20px_rgba(59,130,246,0.15)] animate-pulse">
-              J
-            </div>
+            <img 
+              src="/favicon.png" 
+              alt="JX AI Logo" 
+              referrerPolicy="no-referrer"
+              className="w-16 h-16 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] animate-pulse object-cover" 
+            />
             <div className="space-y-1">
               <h1 className="text-2xl font-extrabold tracking-tight text-white bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 JX AI Workspace
@@ -2368,9 +2448,12 @@ export default function App() {
         {/* Brand Header */}
         <div className={`p-5 flex items-center justify-between border-b ${subBorderClass}`}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-black border border-zinc-800 text-white flex items-center justify-center font-bold text-lg shadow-[0_0_8px_rgba(255,255,255,0.15)]">
-              J
-            </div>
+            <img 
+              src="/favicon.png" 
+              alt="JX AI Logo" 
+              referrerPolicy="no-referrer"
+              className="w-9 h-9 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] object-cover" 
+            />
             <div>
               <h2 className="text-base font-bold tracking-tight text-white">JX AI</h2>
               <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1">
@@ -2696,9 +2779,12 @@ export default function App() {
               {/* Mobile Sidebar Header */}
               <div className={`p-4 flex justify-between items-center border-b ${subBorderClass}`}>
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-black border border-zinc-800 text-white flex items-center justify-center font-bold font-sans shadow-[0_0_8px_rgba(255,255,255,0.15)]">
-                    J
-                  </div>
+                  <img 
+                    src="/favicon.png" 
+                    alt="JX AI Logo" 
+                    referrerPolicy="no-referrer"
+                    className="w-8 h-8 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] object-cover" 
+                  />
                   <span className="font-bold text-sm text-white">JX AI v3.5</span>
                 </div>
                 <button
@@ -4724,109 +4810,265 @@ export default function App() {
 
             {/* Sub-Tab: WhatsApp Chatbot Setup */}
             {devSubTab === "whatsapp" && (
-              <div className="space-y-6 animate-fadeIn text-left">
-                <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
-                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
-                    <MessageSquare className="w-4 h-4 text-emerald-400" />
-                    💬 Meta WhatsApp Cloud API Integration Setup
-                  </h3>
-                  <p className="text-xs text-zinc-400">
-                    Follow these step-by-step instructions to connect your JX AI chatbot backend to the official Meta WhatsApp Cloud API and Firebase Authentication.
-                  </p>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-fadeIn text-left">
+                {/* Left Column (Status & Test Message) */}
+                <div className="lg:col-span-5 space-y-6">
+                  {/* WhatsApp connection status card */}
+                  <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
+                    <div className="flex items-center justify-between border-b pb-2.5 border-zinc-800/40">
+                      <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-emerald-400" />
+                        Connection Status
+                      </h3>
+                      <button
+                        onClick={fetchWhatsappStatus}
+                        disabled={loadingWhatsappStatus}
+                        className="p-1 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-all cursor-pointer"
+                        title="Refresh connection status"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loadingWhatsappStatus ? "animate-spin" : ""}`} />
+                      </button>
+                    </div>
 
-                  <div className="space-y-4 pt-2 text-zinc-300 text-xs leading-relaxed">
+                    {loadingWhatsappStatus ? (
+                      <div className="py-8 flex flex-col items-center justify-center space-y-2">
+                        <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-[11px] text-zinc-500 font-medium">Checking connection...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Huge glowy status badge */}
+                        <div className="flex items-center gap-3 p-3.5 rounded-xl bg-zinc-950/40 border border-zinc-900">
+                          {whatsappStatus?.status === "connected" ? (
+                            <>
+                              <div className="relative flex h-3.5 w-3.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-emerald-400 block font-mono uppercase tracking-wide">CONNECTED</span>
+                                <span className="text-[10px] text-zinc-400">Meta Cloud API active</span>
+                              </div>
+                            </>
+                          ) : whatsappStatus?.status === "partial" ? (
+                            <>
+                              <div className="relative flex h-3.5 w-3.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500"></span>
+                              </div>
+                              <div>
+                                <span className="text-xs font-bold text-amber-400 block font-mono uppercase tracking-wide">PARTIALLY CONFIGURED</span>
+                                <span className="text-[10px] text-zinc-400">Missing some secrets</span>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-zinc-600"></span>
+                              <div>
+                                <span className="text-xs font-bold text-zinc-400 block font-mono uppercase tracking-wide">DISCONNECTED</span>
+                                <span className="text-[10px] text-zinc-500">No active secrets set</span>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Secret Checks */}
+                        <div className="space-y-2 text-xs">
+                          <div className="flex justify-between items-center bg-zinc-950/20 px-2.5 py-2 rounded-xl border border-zinc-900/60">
+                            <span className="text-zinc-500 font-mono text-[10px]">WHATSAPP_ACCESS_TOKEN</span>
+                            <span className={`text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full ${whatsappStatus?.config?.accessTokenSet ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" : "text-zinc-600 bg-zinc-900 border border-zinc-800"}`}>
+                              {whatsappStatus?.config?.accessTokenSet ? "SET" : "MISSING"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center bg-zinc-950/20 px-2.5 py-2 rounded-xl border border-zinc-900/60">
+                            <span className="text-zinc-500 font-mono text-[10px]">WHATSAPP_PHONE_NUMBER_ID</span>
+                            <span className={`text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full ${whatsappStatus?.config?.phoneIdSet ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" : "text-zinc-600 bg-zinc-900 border border-zinc-800"}`}>
+                              {whatsappStatus?.config?.phoneIdSet ? "SET" : "MISSING"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center bg-zinc-950/20 px-2.5 py-2 rounded-xl border border-zinc-900/60">
+                            <span className="text-zinc-500 font-mono text-[10px]">WHATSAPP_VERIFY_TOKEN</span>
+                            <span className={`text-[10px] font-bold font-mono px-2.5 py-0.5 rounded-full ${whatsappStatus?.config?.verifyTokenSet ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/20" : "text-zinc-400 bg-zinc-900 border border-zinc-800"}`}>
+                              {whatsappStatus?.config?.verifyTokenSet ? "CUSTOM" : "DEFAULT"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Test message button & panel */}
+                  <form onSubmit={handleSendTestMessage} className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
+                      <Send className="w-4 h-4 text-emerald-400" />
+                      Test Message Delivery
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      Send a dynamic live WhatsApp message to verify that your credentials, webhooks, and the official Meta API are properly configured and authorized.
+                    </p>
+
+                    <div className="space-y-3 pt-1">
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-500 block uppercase tracking-wider mb-1.5">RECIPIENT PHONE NUMBER</label>
+                        <input
+                          type="text"
+                          required
+                          value={testRecipientPhone}
+                          onChange={(e) => setTestRecipientPhone(e.target.value)}
+                          placeholder="e.g. 919876543210 (include country code)"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-zinc-500 block uppercase tracking-wider mb-1.5">TEST MESSAGE BODY (OPTIONAL)</label>
+                        <textarea
+                          value={testMessageContent}
+                          onChange={(e) => setTestMessageContent(e.target.value)}
+                          placeholder="If left empty, JX AI sends a cool default welcoming system message."
+                          rows={2}
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 resize-none"
+                        />
+                      </div>
+
+                      {testMessageResult && (
+                        <div className={`p-3 rounded-xl border text-[11px] leading-relaxed ${testMessageResult.success ? "bg-emerald-500/5 border-emerald-500/25 text-emerald-300" : "bg-red-500/5 border-red-500/25 text-red-300"}`}>
+                          <strong>{testMessageResult.success ? "Success: " : "Error: "}</strong>
+                          {testMessageResult.msg}
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={sendingTestMessage || loadingWhatsappStatus}
+                        className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/35 text-zinc-950 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
+                      >
+                        {sendingTestMessage ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-zinc-950 border-t-transparent rounded-full animate-spin" />
+                            <span>Delivering Message...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Send Live Test Message</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Right Column (Webhook Details & Setup Guide) */}
+                <div className="lg:col-span-7 space-y-6">
+                  {/* Credentials block */}
+                  <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
+                      <Terminal className="w-4 h-4 text-emerald-400" />
+                      Webhook Configuration Credentials
+                    </h3>
                     
-                    {/* Step 1 */}
-                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
-                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">1</span>
-                        <span>Configure Webhook in Meta Developer Portal</span>
-                      </div>
-                      <p className="text-zinc-400 leading-relaxed text-[11px]">
-                        Log in to your <strong className="text-white">Meta Developer Console</strong>, create a WhatsApp business app, and navigate to the Webhooks configuration page.
-                      </p>
-                      <div className="space-y-1.5 pt-1.5">
-                        <div>
-                          <span className="text-[10px] text-zinc-500 font-bold block">CALLBACK URL (YOUR API WEBHOOK ENDPOINT)</span>
-                          <div className="flex gap-2 items-center mt-1">
-                            <input
-                              type="text"
-                              readOnly
-                              value={`${window.location.origin}/api/whatsapp/webhook`}
-                              className="w-full bg-zinc-950 border border-zinc-800/80 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-emerald-400 select-all focus:outline-none"
-                            />
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(`${window.location.origin}/api/whatsapp/webhook`);
-                                handleShowNotification("Copied Webhook URL!");
-                              }}
-                              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer font-bold text-[10px]"
-                            >
-                              COPY
-                            </button>
-                          </div>
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Callback URL</span>
+                          <span className="text-[9px] text-zinc-400 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded font-mono">POST</span>
                         </div>
-                        <div className="pt-1">
-                          <span className="text-[10px] text-zinc-500 font-bold block">VERIFY TOKEN (CONFIGURED IN YOUR APP)</span>
-                          <div className="flex gap-2 items-center mt-1">
-                            <input
-                              type="text"
-                              readOnly
-                              value="jx_ai_whatsapp_token_2026"
-                              className="w-full bg-zinc-950 border border-zinc-800/80 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-zinc-400 select-all focus:outline-none"
-                            />
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText("jx_ai_whatsapp_token_2026");
-                                handleShowNotification("Copied Verification Token!");
-                              }}
-                              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer font-bold text-[10px]"
-                            >
-                              COPY
-                            </button>
-                          </div>
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            readOnly
+                            value={`${window.location.origin}/api/whatsapp/webhook`}
+                            className="w-full bg-zinc-950 border border-zinc-800/80 rounded-xl px-3 py-2 font-mono text-[11px] text-emerald-400 select-all focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`${window.location.origin}/api/whatsapp/webhook`);
+                              handleShowNotification("Copied Webhook URL!");
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer font-bold text-[10px] whitespace-nowrap transition-all"
+                          >
+                            COPY
+                          </button>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Step 2 */}
-                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
-                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">2</span>
-                        <span>Subscribe to Webhook Message Events</span>
+                      <div>
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Verify Token</span>
+                          <span className="text-[9px] text-zinc-400 bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded font-mono">string</span>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                          <input
+                            type="text"
+                            readOnly
+                            value={whatsappStatus?.config?.verifyTokenValue || "jx_ai_whatsapp_token_2026"}
+                            className="w-full bg-zinc-950 border border-zinc-800/80 rounded-xl px-3 py-2 font-mono text-[11px] text-zinc-300 select-all focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(whatsappStatus?.config?.verifyTokenValue || "jx_ai_whatsapp_token_2026");
+                              handleShowNotification("Copied Verify Token!");
+                            }}
+                            className="px-3.5 py-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer font-bold text-[10px] whitespace-nowrap transition-all"
+                          >
+                            COPY
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-zinc-400 leading-relaxed text-[11px]">
-                        In your Meta Developer settings under the Webhook fields, click <strong className="text-white">"Subscribe"</strong> for the <strong className="text-emerald-400">messages</strong> subscription field. This triggers Meta to send a webhook event to your JX AI server whenever someone sends a WhatsApp message.
-                      </p>
                     </div>
+                  </div>
 
-                    {/* Step 3 */}
-                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
-                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">3</span>
-                        <span>Configure Environment Secrets in AI Studio Settings</span>
+                  {/* Step-by-Step Guide */}
+                  <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
+                    <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
+                      <BookOpen className="w-4 h-4 text-emerald-400" />
+                      Step-by-Step Setup Guide
+                    </h3>
+
+                    <div className="space-y-4 pt-1 text-zinc-300 text-xs leading-relaxed">
+                      <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900/60 space-y-1.5">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">1</span>
+                          <span>Create Meta Developer App</span>
+                        </div>
+                        <p className="text-zinc-400 text-[11px] leading-relaxed">
+                          Visit the <a href="https://developers.facebook.com/" target="_blank" rel="noopener noreferrer" className="text-emerald-400 underline hover:text-emerald-300">Meta for Developers Portal</a>. Create a new "Other" or "Business" application and add the <strong className="text-white">WhatsApp Product</strong> to your app.
+                        </p>
                       </div>
-                      <p className="text-zinc-400 leading-relaxed text-[11px]">
-                        Ensure that you have configured the following secrets in your AI Studio project Settings menu so that JX AI can authenticate and respond back via the official APIs:
-                      </p>
-                      <ul className="list-disc pl-4 space-y-1 text-[11px] text-zinc-400 font-mono">
-                        <li><strong className="text-zinc-300">WHATSAPP_ACCESS_TOKEN</strong>: Meta System User Permanent Access Token</li>
-                        <li><strong className="text-zinc-300">WHATSAPP_PHONE_NUMBER_ID</strong>: Phone Number ID from Meta dashboard</li>
-                        <li><strong className="text-zinc-300">WHATSAPP_VERIFY_TOKEN</strong>: Your verify token (default: jx_ai_whatsapp_token_2026)</li>
-                      </ul>
-                    </div>
 
-                    {/* Step 4 */}
-                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
-                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">4</span>
-                        <span>Automatic User Sign-up &amp; Secure Sync</span>
+                      <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900/60 space-y-1.5">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">2</span>
+                          <span>Set Up Webhooks</span>
+                        </div>
+                        <p className="text-zinc-400 text-[11px] leading-relaxed">
+                          Navigate to the <strong className="text-white">WhatsApp &gt; Configuration</strong> page. Under Webhooks, click "Edit", paste the <strong className="text-emerald-400">Callback URL</strong> and <strong className="text-emerald-400">Verify Token</strong> shown above, then click "Verify and Save".
+                        </p>
                       </div>
-                      <p className="text-zinc-400 leading-relaxed text-[11px]">
-                        When a WhatsApp message is received, JX AI automatically performs a Firebase Authentication lookup for the phone number. If they don't have an account, JX AI creates a secure <strong className="text-white">Firebase Authentication profile</strong> and registers them into your <strong className="text-white">global users directory</strong>. Chat sessions are stored inside Firestore and sync with their online web accounts instantly!
-                      </p>
-                    </div>
 
+                      <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900/60 space-y-1.5">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">3</span>
+                          <span>Subscribe to messages</span>
+                        </div>
+                        <p className="text-zinc-400 text-[11px] leading-relaxed">
+                          In Webhooks fields section, click "Subscribe" for the <strong className="text-white">messages</strong> subscription field. This triggers Meta to send a POST payload whenever an end-user messages your phone.
+                        </p>
+                      </div>
+
+                      <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900/60 space-y-1.5">
+                        <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">4</span>
+                          <span>Add Settings Secrets</span>
+                        </div>
+                        <p className="text-zinc-400 text-[11px] leading-relaxed">
+                          Configure <strong className="text-zinc-300 font-mono">WHATSAPP_ACCESS_TOKEN</strong> and <strong className="text-zinc-300 font-mono">WHATSAPP_PHONE_NUMBER_ID</strong> inside the Secrets menu to authorize JX AI to respond.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
