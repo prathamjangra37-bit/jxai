@@ -177,8 +177,8 @@ export default function App() {
   const [notification, setNotification] = useState<string | null>(null);
 
   // User Profile States
-  const [userName, setUserName] = useState(() => localStorage.getItem("udgtp_profile_name") || "");
-  const [userEmail, setUserEmail] = useState(() => localStorage.getItem("udgtp_profile_email") || "");
+  const [userName, setUserName] = useState(() => localStorage.getItem("jx_ai_profile_name") || "");
+  const [userEmail, setUserEmail] = useState(() => localStorage.getItem("jx_ai_profile_email") || "");
   const [userBio, setUserBio] = useState("");
   const [userPhotoURL, setUserPhotoURL] = useState("");
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -246,11 +246,11 @@ export default function App() {
         setIsInitializingAuth(false);
         if (user.displayName) {
           setUserName(user.displayName);
-          localStorage.setItem("udgtp_profile_name", user.displayName);
+          localStorage.setItem("jx_ai_profile_name", user.displayName);
         }
         if (user.email) {
           setUserEmail(user.email);
-          localStorage.setItem("udgtp_profile_email", user.email);
+          localStorage.setItem("jx_ai_profile_email", user.email);
         }
         
         // Load custom user profile from Firestore users_directory
@@ -259,7 +259,7 @@ export default function App() {
             if (profile) {
               if (profile.displayName) {
                 setUserName(profile.displayName);
-                localStorage.setItem("udgtp_profile_name", profile.displayName);
+                localStorage.setItem("jx_ai_profile_name", profile.displayName);
               }
               if (profile.bio) {
                 setUserBio(profile.bio);
@@ -564,8 +564,8 @@ export default function App() {
       setWorkspaceAuthNeedsClick(true);
       setUserName("");
       setUserEmail("");
-      localStorage.removeItem("udgtp_profile_name");
-      localStorage.removeItem("udgtp_profile_email");
+      localStorage.removeItem("jx_ai_profile_name");
+      localStorage.removeItem("jx_ai_profile_email");
       localStorage.removeItem("workspace_access_token");
       handleShowNotification("Workspace disconnected successfully.");
     } catch (err: any) {
@@ -653,8 +653,8 @@ export default function App() {
       setWorkspaceAuthNeedsClick(true);
       setUserName("");
       setUserEmail("");
-      localStorage.removeItem("udgtp_profile_name");
-      localStorage.removeItem("udgtp_profile_email");
+      localStorage.removeItem("jx_ai_profile_name");
+      localStorage.removeItem("jx_ai_profile_email");
       localStorage.removeItem("workspace_access_token");
       handleShowNotification("Logged out successfully.");
     } catch (err: any) {
@@ -833,19 +833,19 @@ export default function App() {
   // Load state from LocalStorage on mount
   useEffect(() => {
     // 1. Theme loading
-    const savedTheme = localStorage.getItem("udgtp_theme") as "dark" | "light";
+    const savedTheme = localStorage.getItem("jx_ai_theme") as "dark" | "light";
     if (savedTheme) {
       setTheme(savedTheme);
     }
 
     // 2. Language loading
-    const savedLang = localStorage.getItem("udgtp_lang") as "English" | "Hinglish" | "Hindi";
+    const savedLang = localStorage.getItem("jx_ai_lang") as "English" | "Hinglish" | "Hindi";
     if (savedLang) {
       setLanguage(savedLang);
     }
 
     // 3. Profile loading
-    const savedProfileName = localStorage.getItem("udgtp_profile_name");
+    const savedProfileName = localStorage.getItem("jx_ai_profile_name");
     if (savedProfileName) {
       setUserName(savedProfileName);
     }
@@ -932,7 +932,7 @@ export default function App() {
           setActiveId(firestoreConvs[0].id);
         } else {
           // If no conversations exist in Firestore, check if there are local conversations
-          const savedConversations = localStorage.getItem("udgtp_conversations_v3");
+          const savedConversations = localStorage.getItem("jx_ai_conversations_v3");
           if (savedConversations) {
             try {
               const parsed = JSON.parse(savedConversations);
@@ -998,9 +998,9 @@ export default function App() {
   // Sync conversations to LocalStorage when changed (as backup)
   useEffect(() => {
     if (conversations.length > 0) {
-      localStorage.setItem("udgtp_conversations_v3", JSON.stringify(conversations));
+      localStorage.setItem("jx_ai_conversations_v3", JSON.stringify(conversations));
     } else {
-      localStorage.removeItem("udgtp_conversations_v3");
+      localStorage.removeItem("jx_ai_conversations_v3");
     }
     scrollToBottom();
   }, [conversations]);
@@ -2036,7 +2036,7 @@ export default function App() {
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("udgtp_profile_name", userName);
+    localStorage.setItem("jx_ai_profile_name", userName);
     
     if (currentUser) {
       try {
@@ -2110,8 +2110,8 @@ export default function App() {
   const handleSaveSettings = (newTheme: "dark" | "light", newLang: "English" | "Hinglish" | "Hindi") => {
     setTheme(newTheme);
     setLanguage(newLang);
-    localStorage.setItem("udgtp_theme", newTheme);
-    localStorage.setItem("udgtp_lang", newLang);
+    localStorage.setItem("jx_ai_theme", newTheme);
+    localStorage.setItem("jx_ai_lang", newLang);
     handleShowNotification("Settings updated successfully!");
   };
 
