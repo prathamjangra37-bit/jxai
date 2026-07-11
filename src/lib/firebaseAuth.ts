@@ -1,5 +1,15 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from "firebase/auth";
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged, 
+  User,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile
+} from "firebase/auth";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 // Initialize Firebase App and Auth
@@ -22,24 +32,21 @@ const SCOPES = [
 SCOPES.forEach(scope => provider.addScope(scope));
 
 let isSigningIn = false;
-let cachedAccessToken: string | null = null;
+let cachedAccessToken: string | null = typeof window !== "undefined" ? localStorage.getItem("workspace_access_token") : null;
 
 // Initialize auth state listener
 export const initAuth = (
-  onAuthSuccess?: (user: User, token: string) => void,
+  onAuthSuccess?: (user: User, token: string | null) => void,
   onAuthFailure?: () => void
 ) => {
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
-      if (cachedAccessToken) {
-        if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
-      } else if (!isSigningIn) {
-        // If we have a user but no cached token, we can ask user to sign in again
-        // or check if there is an easy way. In-memory caching means they click sign in.
-        if (onAuthFailure) onAuthFailure();
-      }
+      if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
     } else {
       cachedAccessToken = null;
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("workspace_access_token");
+      }
       if (onAuthFailure) onAuthFailure();
     }
   });
@@ -56,12 +63,38 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
     }
 
     cachedAccessToken = credential.accessToken;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("workspace_access_token", cachedAccessToken);
+    }
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error: any) {
     console.error("Sign in error:", error);
     throw error;
   } finally {
     isSigningIn = false;
+  }
+};
+
+// Email / Password signup
+export const emailSignUp = async (email: string, password: string, displayName: string): Promise<User> => {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    await updateProfile(result.user, { displayName });
+    return result.user;
+  } catch (error: any) {
+    console.error("Email signup error:", error);
+    throw error;
+  }
+};
+
+// Email / Password signin
+export const emailSignIn = async (email: string, password: string): Promise<User> => {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    return result.user;
+  } catch (error: any) {
+    console.error("Email signin error:", error);
+    throw error;
   }
 };
 
@@ -72,4 +105,7 @@ export const getAccessToken = async (): Promise<string | null> => {
 export const logout = async () => {
   await auth.signOut();
   cachedAccessToken = null;
+  if (typeof window !== "undefined") {
+    localStorage.removeItem("workspace_access_token");
+  }
 };

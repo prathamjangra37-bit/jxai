@@ -38,14 +38,15 @@ import {
   WifiOff,
   HelpCircle,
   Mail,
-  Calendar
+  Calendar,
+  LogOut
 } from "lucide-react";
 import { SUGGESTIONS, PRINCIPLES } from "./data";
 import { Message, Conversation, Attachment } from "./types";
 import { MarkdownView } from "./components/MarkdownView";
 import { TypewriterView } from "./components/TypewriterView";
 import { motion, AnimatePresence } from "motion/react";
-import { initAuth, googleSignIn, logout } from "./lib/firebaseAuth";
+import { initAuth, googleSignIn, logout, emailSignUp, emailSignIn } from "./lib/firebaseAuth";
 import { 
   listCalendarEvents, 
   createCalendarEvent, 
@@ -66,6 +67,17 @@ export default function App() {
   const [workspaceAuthNeedsClick, setWorkspaceAuthNeedsClick] = useState<boolean>(false);
   const [workspaceAuthLoading, setWorkspaceAuthLoading] = useState<boolean>(false);
   const [workspaceAuthError, setWorkspaceAuthError] = useState<string | null>(null);
+  const [isInitializingAuth, setIsInitializingAuth] = useState<boolean>(true);
+
+  // General Firebase Auth States
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authConfirmPassword, setAuthConfirmPassword] = useState("");
+  const [authDisplayName, setAuthDisplayName] = useState("");
+  const [appAuthError, setAppAuthError] = useState<string | null>(null);
+  const [appAuthLoading, setAppAuthLoading] = useState<boolean>(false);
   
   // Calendar States
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
@@ -123,8 +135,8 @@ export default function App() {
   const [notification, setNotification] = useState<string | null>(null);
 
   // User Profile States
-  const [userName, setUserName] = useState("Pratham Jangra");
-  const [userEmail, setUserEmail] = useState("prathamjangra37@gmail.com");
+  const [userName, setUserName] = useState(() => localStorage.getItem("udgtp_profile_name") || "");
+  const [userEmail, setUserEmail] = useState(() => localStorage.getItem("udgtp_profile_email") || "");
 
   // Settings states
   const [theme, setTheme] = useState<"dark" | "light">("dark");
@@ -155,14 +167,24 @@ export default function App() {
       (user, token) => {
         setWorkspaceToken(token);
         setWorkspaceUser(user);
+        setCurrentUser(user);
         setWorkspaceAuthNeedsClick(false);
-        if (user.displayName) setUserName(user.displayName);
-        if (user.email) setUserEmail(user.email);
+        setIsInitializingAuth(false);
+        if (user.displayName) {
+          setUserName(user.displayName);
+          localStorage.setItem("udgtp_profile_name", user.displayName);
+        }
+        if (user.email) {
+          setUserEmail(user.email);
+          localStorage.setItem("udgtp_profile_email", user.email);
+        }
       },
       () => {
         setWorkspaceToken(null);
         setWorkspaceUser(null);
+        setCurrentUser(null);
         setWorkspaceAuthNeedsClick(true);
+        setIsInitializingAuth(false);
       }
     );
     return () => unsubscribe();
@@ -346,10 +368,105 @@ export default function App() {
       await logout();
       setWorkspaceToken(null);
       setWorkspaceUser(null);
+      setCurrentUser(null);
       setWorkspaceAuthNeedsClick(true);
+      setUserName("");
+      setUserEmail("");
+      localStorage.removeItem("udgtp_profile_name");
+      localStorage.removeItem("udgtp_profile_email");
+      localStorage.removeItem("workspace_access_token");
       handleShowNotification("Workspace disconnected successfully.");
     } catch (err: any) {
       console.error("Google logout failed:", err);
+    }
+  };
+
+  const handleEmailSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail || !authPassword) {
+      setAppAuthError("Please fill in all fields.");
+      return;
+    }
+    setAppAuthLoading(true);
+    setAppAuthError(null);
+    try {
+      const user = await emailSignIn(authEmail, authPassword);
+      setCurrentUser(user);
+      if (user.displayName) setUserName(user.displayName);
+      if (user.email) setUserEmail(user.email);
+      handleShowNotification("Logged in successfully!");
+    } catch (err: any) {
+      console.error("Email sign-in failed:", err);
+      // Simplify Firebase error messages
+      let msg = err.message || String(err);
+      if (err.code === "auth/invalid-credential") {
+        msg = "Invalid email or password. Please try again.";
+      } else if (err.code === "auth/invalid-email") {
+        msg = "The email address is not valid.";
+      } else if (err.code === "auth/user-not-found") {
+        msg = "No account found with this email. Please sign up.";
+      } else if (err.code === "auth/wrong-password") {
+        msg = "Incorrect password.";
+      }
+      setAppAuthError(msg);
+    } finally {
+      setAppAuthLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!authEmail || !authPassword || !authDisplayName) {
+      setAppAuthError("Please fill in all fields.");
+      return;
+    }
+    if (authPassword !== authConfirmPassword) {
+      setAppAuthError("Passwords do not match.");
+      return;
+    }
+    if (authPassword.length < 6) {
+      setAppAuthError("Password must be at least 6 characters.");
+      return;
+    }
+    setAppAuthLoading(true);
+    setAppAuthError(null);
+    try {
+      const user = await emailSignUp(authEmail, authPassword, authDisplayName);
+      setCurrentUser(user);
+      setUserName(authDisplayName);
+      setUserEmail(authEmail);
+      handleShowNotification("Account created and logged in successfully!");
+    } catch (err: any) {
+      console.error("Email sign-up failed:", err);
+      let msg = err.message || String(err);
+      if (err.code === "auth/email-already-in-use") {
+        msg = "An account with this email already exists.";
+      } else if (err.code === "auth/invalid-email") {
+        msg = "The email address is not valid.";
+      } else if (err.code === "auth/weak-password") {
+        msg = "Password is too weak. Must be at least 6 characters.";
+      }
+      setAppAuthError(msg);
+    } finally {
+      setAppAuthLoading(false);
+    }
+  };
+
+  const handleAppLogout = async () => {
+    try {
+      await logout();
+      setCurrentUser(null);
+      setWorkspaceToken(null);
+      setWorkspaceUser(null);
+      setWorkspaceAuthNeedsClick(true);
+      setUserName("");
+      setUserEmail("");
+      localStorage.removeItem("udgtp_profile_name");
+      localStorage.removeItem("udgtp_profile_email");
+      localStorage.removeItem("workspace_access_token");
+      handleShowNotification("Logged out successfully.");
+    } catch (err: any) {
+      console.error("Logout failed:", err);
     }
   };
 
@@ -1508,6 +1625,260 @@ export default function App() {
   const textMutedClass = isDark ? "text-zinc-400" : "text-zinc-500";
   const subBorderClass = isDark ? "border-zinc-800/50" : "border-zinc-200";
 
+  if (isInitializingAuth) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-screen w-full font-sans ${bgClass}`}>
+        <div className="space-y-4 text-center">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-white font-bold text-2xl shadow-[0_0_25px_rgba(255,255,255,0.08)]">
+            J
+          </div>
+          <div className="space-y-1 animate-pulse">
+            <h1 className="text-sm font-bold tracking-tight text-zinc-300">Loading JX AI Workspace...</h1>
+            <p className="text-[10px] text-zinc-500 font-mono">Initializing secure connection</p>
+          </div>
+          <div className="w-24 h-1 bg-zinc-800/80 mx-auto rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '60%' }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className={`flex min-h-screen w-full items-center justify-center font-sans ${bgClass} p-4 md:p-6 overflow-y-auto`}>
+        <div className={`w-full max-w-md p-6 md:p-8 rounded-3xl border ${cardClass} shadow-2xl space-y-6 my-4`}>
+          
+          <div className="flex flex-col items-center text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-950 border border-zinc-800 flex items-center justify-center text-white font-black text-xl shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+              J
+            </div>
+            <div className="space-y-1">
+              <h1 className="text-xl font-extrabold tracking-tight">Welcome to JX AI</h1>
+              <p className="text-[11px] text-zinc-400 leading-relaxed font-sans max-w-[280px] mx-auto">
+                Your comprehensive multi-session AI assistant with secure Google Workspace integrations.
+              </p>
+            </div>
+          </div>
+
+          {/* Tab Switcher */}
+          <div className="flex p-1 rounded-xl bg-zinc-950/65 border border-zinc-800/80">
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("signin");
+                setAppAuthError(null);
+              }}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                authMode === "signin"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAuthMode("signup");
+                setAppAuthError(null);
+              }}
+              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                authMode === "signup"
+                  ? "bg-zinc-800 text-white shadow-sm"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          {/* Form Content */}
+          {authMode === "signin" ? (
+            <form onSubmit={handleEmailSignIn} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  required
+                />
+              </div>
+
+              {appAuthError && (
+                <div className="p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400 text-left">
+                  {appAuthError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={appAuthLoading}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {appAuthLoading ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-t-white animate-spin" />
+                    <span>Signing In...</span>
+                  </>
+                ) : (
+                  <span>Sign In</span>
+                )}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleEmailSignUp} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="Your Name"
+                  value={authDisplayName}
+                  onChange={(e) => setAuthDisplayName(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="you@example.com"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Password</label>
+                <input
+                  type="password"
+                  placeholder="•••••••• (Min 6 chars)"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Confirm Password</label>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={authConfirmPassword}
+                  onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                  className={`w-full px-4 py-3 rounded-xl border text-xs font-sans transition-all outline-none focus:ring-1 focus:ring-blue-500/20 ${inputBgClass}`}
+                  required
+                />
+              </div>
+
+              {appAuthError && (
+                <div className="p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-xs text-red-400 text-left">
+                  {appAuthError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={appAuthLoading}
+                className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {appAuthLoading ? (
+                  <>
+                    <span className="w-4 h-4 rounded-full border-2 border-t-white animate-spin" />
+                    <span>Creating Account...</span>
+                  </>
+                ) : (
+                  <span>Create Account</span>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* Social Divider */}
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-zinc-800/85"></div>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase">
+              <span className={`${isDark ? 'bg-[#121215] text-zinc-500' : 'bg-white text-zinc-400'} px-3 font-bold tracking-wider`}>
+                or continue with
+              </span>
+            </div>
+          </div>
+
+          {workspaceAuthError && (
+            <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-left space-y-3 text-xs">
+              {workspaceAuthError === "IFRAME_POPUP_CLOSED" ? (
+                <>
+                  <p className="font-bold text-red-400 flex items-center gap-1.5">
+                    <span className="text-sm">⚠️</span> Iframe Popup Blocked / Closed
+                  </p>
+                  <p className="text-zinc-300 leading-relaxed text-[11px]">
+                    Google Sign-In requires a separate popup. Since the JX AI app is currently running inside the AI Studio preview iframe, browser policies blocked or closed the login popup automatically.
+                  </p>
+                  <div className="p-3 bg-zinc-950/45 rounded-xl border border-zinc-800/65 text-[11px] space-y-1.5 text-zinc-300 leading-relaxed font-sans">
+                    <p className="font-bold text-zinc-200">🛠️ समाधान (Solution):</p>
+                    <ol className="list-decimal pl-4 space-y-1">
+                      <li>Look at the top-right corner of your AI Studio screen.</li>
+                      <li>Click the <strong>'Open in new tab'</strong> (pop-out ↗️) icon next to the preview frame.</li>
+                      <li>Once the app is open in its own separate tab, click <strong>'Sign In with Google'</strong> again. It will work flawlessly!</li>
+                    </ol>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold text-red-400">Connection Failed</p>
+                  <p className="text-zinc-300 leading-relaxed text-[11px] font-mono">
+                    {workspaceAuthError}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleWorkspaceLogin}
+            disabled={workspaceAuthLoading}
+            className="w-full py-3 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold font-sans transition-all duration-150 cursor-pointer shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {workspaceAuthLoading ? (
+              <>
+                <span className="w-4 h-4 rounded-full border-2 border-t-zinc-900 animate-spin" />
+                <span>Connecting Google...</span>
+              </>
+            ) : (
+              <>
+                <Globe className="w-4 h-4" />
+                <span>Sign In with Google</span>
+              </>
+            )}
+          </button>
+          
+          <p className="text-[10px] text-zinc-500 font-mono text-center">
+            Secure multi-session auth by Firebase
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex h-screen w-full overflow-hidden font-sans transition-colors duration-200 ${bgClass}`}>
       
@@ -1771,6 +2142,25 @@ export default function App() {
             <HelpCircle className="w-4 h-4" />
             <span>Help &amp; Guide</span>
           </button>
+
+          <div className="border-t border-zinc-800/40 my-3 pt-3 space-y-2">
+            <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-950/45 border border-zinc-900">
+              <div className="w-8 h-8 rounded-full bg-blue-600/10 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-sm uppercase shrink-0">
+                {userName ? userName.charAt(0) : "U"}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-zinc-300 truncate leading-none">{userName || "JX User"}</p>
+                <p className="text-[10px] text-zinc-500 font-mono truncate mt-1">{userEmail}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleAppLogout}
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-all text-red-400 hover:text-red-300 hover:bg-red-500/10"
+            >
+              <LogOut className="w-4 h-4 text-red-400" />
+              <span>Log Out / Exit</span>
+            </button>
+          </div>
         </div>
       </aside>
 
@@ -2026,6 +2416,28 @@ export default function App() {
                   <HelpCircle className="w-4 h-4" />
                   <span>Help &amp; Guide</span>
                 </button>
+
+                <div className="border-t border-zinc-800/40 my-3 pt-3 space-y-2">
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-zinc-950/45 border border-zinc-900">
+                    <div className="w-7 h-7 rounded-full bg-blue-600/10 border border-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                      {userName ? userName.charAt(0) : "U"}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-bold text-zinc-300 truncate leading-none">{userName || "JX User"}</p>
+                      <p className="text-[9px] text-zinc-500 font-mono truncate mt-0.5">{userEmail}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      handleAppLogout();
+                      setIsSidebarOpen(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                  >
+                    <LogOut className="w-4 h-4 text-red-400" />
+                    <span>Log Out / Exit</span>
+                  </button>
+                </div>
               </div>
             </motion.aside>
           </>
