@@ -1,0 +1,91 @@
+{
+  "entities": {
+    "UserDirectory": {
+      "title": "User Directory Profile",
+      "description": "User profiles and permissions for system-wide access control",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Unique Firebase Authentication UID of the user"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's registered or derived email address"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Full name or custom nickname of the user"
+        },
+        "isAnonymous": {
+          "type": "boolean",
+          "description": "Whether this is a guest/anonymous session"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["Member", "Developer"],
+          "description": "The system authorization level"
+        },
+        "lastLogin": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the user's last authentication"
+        },
+        "lastActivePlatform": {
+          "type": "string",
+          "enum": ["Web", "WhatsApp"],
+          "description": "The medium on which they were last active"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "pattern": "^\\+[1-9]\\d{1,14}$",
+          "description": "The E.164-conforming phone number of the user"
+        }
+      },
+      "required": ["uid", "displayName", "isAnonymous", "role"]
+    },
+    "Conversation": {
+      "title": "Conversation Session",
+      "description": "A persistent chatbot session containing sequential chat logs",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique conversation identifier"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Automatically generated or custom-renamed title of the session"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Session creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Session modification timestamp"
+        },
+        "messages": {
+          "type": "array",
+          "description": "Chronological array of sent and received messages"
+        }
+      },
+      "required": ["id", "title", "createdAt", "messages"]
+    }
+  },
+  "firestore": {
+    "users_directory/{uid}": {
+      "schema": "UserDirectory",
+      "description": "Global user account tracking and role verification"
+    },
+    "users/{uid}/conversations/{conversationId}": {
+      "schema": "Conversation",
+      "description": "Secure, private chat history logs for each user"
+    }
+  }
+}

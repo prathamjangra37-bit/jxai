@@ -2,6 +2,14 @@
 import express from "express";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { 
+  getOrCreateFirebaseUserByPhone, 
+  syncUserInDirectory, 
+  loadWhatsAppConversation, 
+  saveWhatsAppConversation, 
+  sendWhatsAppTextMessage, 
+  formatTextForWhatsApp 
+} from "./src/lib/whatsappService";
 
 dotenv.config();
 
@@ -419,6 +427,172 @@ app.get("/api/media/:id", (req, res) => {
     console.error("Serve Media Error:", error);
     res.setHeader("Content-Type", "application/json");
     return res.status(500).json({ error: error.message || "Error serving media file" });
+  }
+});
+
+// ==========================================
+// Meta WhatsApp Cloud API Chatbot Backend
+// ==========================================
+
+// Webhook Verification (GET)
+// Meta uses this endpoint to verify that your webhook URL belongs to you and is alive.
+app.get("/api/whatsapp/webhook", (req, res) => {
+  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || "jx_ai_whatsapp_token_2026";
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  console.log(`[WhatsApp Verification] Received request: mode=${mode}, token=${token}`);
+
+  if (mode && token) {
+    if (mode === "subscribe" && token === verifyToken) {
+      console.log("✦ [WhatsApp Webhook] Webhook successfully verified and subscribed!");
+      return res.status(200).send(challenge);
+    } else {
+      console.warn("⚠ [WhatsApp Webhook] Verification failed. Token mismatch.");
+      return res.sendStatus(403);
+    }
+  }
+  return res.status(400).send("Missing hub.mode or hub.verify_token");
+});
+
+// Webhook Message Event Handler (POST)
+// Receives WhatsApp messages, processes with Gemini AI, stores to Firestore, and responds.
+app.post("/api/whatsapp/webhook", async (req, res) => {
+  try {
+    const body = req.body;
+
+    // Check if this is indeed a whatsapp status/message event
+    if (body.object !== "whatsapp_business_account") {
+      return res.status(404).json({ error: "Not a WhatsApp business event" });
+    }
+
+    const entry = body.entry?.[0];
+    const changes = entry?.changes?.[0];
+    const value = changes?.value;
+
+    // Meta sends multiple webhooks, including read/delivery receipts.
+    // If there are no actual messages in the payload, acknowledge receipt and return.
+    if (!value || !value.messages || !Array.isArray(value.messages)) {
+      return res.status(200).json({ status: "acknowledged" });
+    }
+
+    const message = value.messages[0];
+    const contact = value.contacts?.[0];
+
+    const fromPhone = message.from; // Sender phone (e.g., "919876543210")
+    const senderName = contact?.profile?.name || "WhatsApp User";
+    const messageId = message.id;
+    const phoneId = value.metadata?.phone_number_id; // Your WhatsApp Phone ID
+
+    // We only process text-based messages or basic attachments
+    let messageText = "";
+    if (message.type === "text") {
+      messageText = message.text?.body || "";
+    } else {
+      messageText = `[Received non-text message of type: ${message.type}]`;
+    }
+
+    if (!messageText.trim()) {
+      return res.status(200).json({ status: "empty_text" });
+    }
+
+    console.log(`\n✦ [WhatsApp Chat] Incoming message from ${fromPhone} (${senderName}): "${messageText}"`);
+
+    // Verify WhatsApp Access Token configuration
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    if (!accessToken) {
+      console.error("⚠ [WhatsApp Config Error] WHATSAPP_ACCESS_TOKEN is missing in Environment Variables!");
+      // Still return 200 OK to Meta so they stop retrying the same payload
+      return res.status(200).json({ error: "WHATSAPP_ACCESS_TOKEN is missing in environment." });
+    }
+
+    // 1. Authenticate/Retrieve secure Firebase Auth profile by phone number
+    const firebaseUser = await getOrCreateFirebaseUserByPhone(fromPhone, senderName);
+    const uid = firebaseUser.uid;
+
+    // 2. Register/Sync user details in global users_directory
+    await syncUserInDirectory(uid, fromPhone, senderName);
+
+    // 3. Load user's persistent chatbot session history from Firestore
+    const { messages: chatHistory, title, createdAt } = await loadWhatsAppConversation(uid);
+
+    // 4. Append user's new message to conversation log
+    chatHistory.push({
+      id: messageId,
+      role: "user",
+      content: messageText,
+      timestamp: new Date()
+    });
+
+    // 5. Query the multimodal Gemini model using standard client
+    const client = getGeminiClient();
+
+    // Bound context messages to prevent massive latency or exceeding limits
+    const maxHistoryContext = 12;
+    const boundedHistory = chatHistory.slice(-maxHistoryContext);
+    const contents = boundedHistory.map((m) => ({
+      role: m.role === "user" ? "user" : "model",
+      parts: [{ text: m.content }]
+    }));
+
+    // System instruction tuned specifically for the WhatsApp user interface medium
+    const whatsappSystemInstruction = `तुम्हारा नाम 'JX AI' है। तुम एक अत्यंत बुद्धिमान, संस्कारी, रचनात्मक और बहुमुखी AI असिस्टेंट हो।
+तुम WhatsApp पर Pratham Jangra के द्वारा बनाए गए JX AI के रूप में बात कर रहे हो।
+
+डेवलपर की पहचान (Creator Identity Rules):
+- यदि कोई यूजर तुमसे पूछता है कि तुम्हें किसने बनाया है, तुम्हारा निर्माता या डेवलपर कौन है, तो तुम्हें हमेशा और केवल यही जवाब देना है: "JX AI was developed by Pratham Jangra."
+- ध्यान रहे कि यह नियम केवल तुम पर (JX AI) ही लागू होता है।
+
+WhatsApp फ़ॉर्मेटिंग और शैली के नियम (WhatsApp Formatting & Style):
+1. तुम WhatsApp पर बात कर रहे हो। WhatsApp पर HTML, Markdown Headings (जैसे #, ##, ###), या checklists (जैसे - [ ]) काम नहीं करते हैं।
+2. केवल WhatsApp-friendly फ़ॉर्मेटिंग का उपयोग करो:
+   - *bold* के लिए शब्दों के आगे-पीछे * लगाओ (जैसे: *लाडले*)
+   - _italic_ के लिए _ लगाओ (जैसे: _राम राम_)
+   - ~strikethrough~ के लिए ~ लगाओ
+   - \`code\` के लिए \` लगाओ
+3. अपने जवाबों को छोटा, प्यारा, सीधा और अत्यंत पठनीय रखो ताकि मोबाइल पर आसानी से पढ़ा जा सके।
+4. पैराग्राफ छोटे रखो और बुलेट पॉइंट्स के लिए सिंपल '-' या इमोजिस (जैसे ✦, •, ✅) का उपयोग करो।
+
+भाषा के नियम (Language Rules):
+1. तुम हिंदी, अंग्रेजी और हिंग्लिश (Hinglish) तीनों को बहुत अच्छी तरह समझते हो।
+2. जब भी कोई नई बातचीत शुरू हो, तो हमेशा यूजर का स्वागत अंग्रेजी में करो (उदा: "Hello! I'm JX AI. How can I help you today?").
+3. शुरुआती स्वागत के बाद, यूजर जिस भी भाषा या देसी लहजे में बात करे, तुम्हें उसी लहजे में जवाब देना है। 'राम राम', 'भाई', 'लाडले' जैसे आत्मीय और संस्कारी देसी शब्दों का खुलकर प्रयोग करो।
+
+सत्यता व सटीकता (Accuracy):
+1. सिर्फ वही जानकारी प्रदान करो जिसका तार्किक आधार हो।
+2. यदि तुम्हें किसी चीज़ का जवाब निश्चित तौर पर नहीं पता है, तो मनगढ़ंत बातें बनाने के बजाय बिल्कुल साफ और विनम्रता से मना कर दो (उदा: "लाडले, इस बात का मन्ने पक्का ज्ञान कोन्या, गलत जानकारी मैं देता कोन्या!").`;
+
+    // Generate output with Fallback & Retry mechanism
+    console.log(`[WhatsApp AI] Requesting generation from Gemini...`);
+    const { response, modelUsed } = await callGeminiWithRetryAndFallback(client, contents, whatsappSystemInstruction);
+    const aiResponseText = response.text || "Ram Ram Bhai! Kuch samasya aayi hai, kripya dubaara koshish karein.";
+
+    console.log(`[WhatsApp AI] Generation completed using model: ${modelUsed}`);
+
+    // Format text specifically for pristine WhatsApp screen readability
+    const formattedReply = formatTextForWhatsApp(aiResponseText);
+
+    // 6. Append AI response to history
+    const aiMsgId = `ai_msg_${Math.random().toString(36).substring(2, 11)}`;
+    chatHistory.push({
+      id: aiMsgId,
+      role: "model",
+      content: aiResponseText,
+      timestamp: new Date()
+    });
+
+    // 7. Save conversation back to Firestore securely
+    await saveWhatsAppConversation(uid, chatHistory, title, createdAt);
+
+    // 8. Deliver response to user via official Meta API
+    await sendWhatsAppTextMessage(phoneId, fromPhone, formattedReply, accessToken);
+
+    return res.status(200).json({ status: "success", uid, model: modelUsed });
+  } catch (err: any) {
+    console.error("⚠ [WhatsApp Webhook Error]:", err);
+    // Always return 200 OK to Meta so they stop flooding the webhook with retries
+    return res.status(200).json({ status: "error", message: err.message || err });
   }
 });
 

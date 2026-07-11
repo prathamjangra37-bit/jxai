@@ -202,7 +202,7 @@ export default function App() {
   ]);
 
   // Developer Console Sub-Tabs & User Search
-  const [devSubTab, setDevSubTab] = useState<"admin" | "users" | "playground" | "settings">("admin");
+  const [devSubTab, setDevSubTab] = useState<"admin" | "users" | "playground" | "settings" | "whatsapp">("admin");
   const [usersSearchQuery, setUsersSearchQuery] = useState("");
   const [directoryUsers, setDirectoryUsers] = useState<any[]>([]);
   const [loadingUsersDirectory, setLoadingUsersDirectory] = useState(false);
@@ -4265,7 +4265,7 @@ export default function App() {
 
             {/* Developer Sub-Tabs Selector */}
             <div className="flex border-b border-zinc-800/60 pb-1 gap-2 overflow-x-auto scrollbar-none">
-              {(["admin", "users", "playground", "settings"] as const).map((tab) => (
+              {(["admin", "users", "playground", "settings", "whatsapp"] as const).map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setDevSubTab(tab)}
@@ -4279,6 +4279,7 @@ export default function App() {
                   {tab === "users" && "👥 User Management"}
                   {tab === "playground" && "🧪 LLM Playground"}
                   {tab === "settings" && "⚙️ System Configuration"}
+                  {tab === "whatsapp" && "💬 WhatsApp Chatbot"}
                 </button>
               ))}
             </div>
@@ -4716,6 +4717,116 @@ export default function App() {
                     >
                       Copy Raw Auth Context
                     </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-Tab: WhatsApp Chatbot Setup */}
+            {devSubTab === "whatsapp" && (
+              <div className="space-y-6 animate-fadeIn text-left">
+                <div className={`p-5 rounded-2xl border ${cardClass} space-y-4`}>
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-2 border-b pb-2.5 border-zinc-800/40">
+                    <MessageSquare className="w-4 h-4 text-emerald-400" />
+                    💬 Meta WhatsApp Cloud API Integration Setup
+                  </h3>
+                  <p className="text-xs text-zinc-400">
+                    Follow these step-by-step instructions to connect your JX AI chatbot backend to the official Meta WhatsApp Cloud API and Firebase Authentication.
+                  </p>
+
+                  <div className="space-y-4 pt-2 text-zinc-300 text-xs leading-relaxed">
+                    
+                    {/* Step 1 */}
+                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">1</span>
+                        <span>Configure Webhook in Meta Developer Portal</span>
+                      </div>
+                      <p className="text-zinc-400 leading-relaxed text-[11px]">
+                        Log in to your <strong className="text-white">Meta Developer Console</strong>, create a WhatsApp business app, and navigate to the Webhooks configuration page.
+                      </p>
+                      <div className="space-y-1.5 pt-1.5">
+                        <div>
+                          <span className="text-[10px] text-zinc-500 font-bold block">CALLBACK URL (YOUR API WEBHOOK ENDPOINT)</span>
+                          <div className="flex gap-2 items-center mt-1">
+                            <input
+                              type="text"
+                              readOnly
+                              value={`${window.location.origin}/api/whatsapp/webhook`}
+                              className="w-full bg-zinc-950 border border-zinc-800/80 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-emerald-400 select-all focus:outline-none"
+                            />
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(`${window.location.origin}/api/whatsapp/webhook`);
+                                handleShowNotification("Copied Webhook URL!");
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer font-bold text-[10px]"
+                            >
+                              COPY
+                            </button>
+                          </div>
+                        </div>
+                        <div className="pt-1">
+                          <span className="text-[10px] text-zinc-500 font-bold block">VERIFY TOKEN (CONFIGURED IN YOUR APP)</span>
+                          <div className="flex gap-2 items-center mt-1">
+                            <input
+                              type="text"
+                              readOnly
+                              value="jx_ai_whatsapp_token_2026"
+                              className="w-full bg-zinc-950 border border-zinc-800/80 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-zinc-400 select-all focus:outline-none"
+                            />
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText("jx_ai_whatsapp_token_2026");
+                                handleShowNotification("Copied Verification Token!");
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer font-bold text-[10px]"
+                            >
+                              COPY
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">2</span>
+                        <span>Subscribe to Webhook Message Events</span>
+                      </div>
+                      <p className="text-zinc-400 leading-relaxed text-[11px]">
+                        In your Meta Developer settings under the Webhook fields, click <strong className="text-white">"Subscribe"</strong> for the <strong className="text-emerald-400">messages</strong> subscription field. This triggers Meta to send a webhook event to your JX AI server whenever someone sends a WhatsApp message.
+                      </p>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">3</span>
+                        <span>Configure Environment Secrets in AI Studio Settings</span>
+                      </div>
+                      <p className="text-zinc-400 leading-relaxed text-[11px]">
+                        Ensure that you have configured the following secrets in your AI Studio project Settings menu so that JX AI can authenticate and respond back via the official APIs:
+                      </p>
+                      <ul className="list-disc pl-4 space-y-1 text-[11px] text-zinc-400 font-mono">
+                        <li><strong className="text-zinc-300">WHATSAPP_ACCESS_TOKEN</strong>: Meta System User Permanent Access Token</li>
+                        <li><strong className="text-zinc-300">WHATSAPP_PHONE_NUMBER_ID</strong>: Phone Number ID from Meta dashboard</li>
+                        <li><strong className="text-zinc-300">WHATSAPP_VERIFY_TOKEN</strong>: Your verify token (default: jx_ai_whatsapp_token_2026)</li>
+                      </ul>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-900 space-y-2">
+                      <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px]">4</span>
+                        <span>Automatic User Sign-up &amp; Secure Sync</span>
+                      </div>
+                      <p className="text-zinc-400 leading-relaxed text-[11px]">
+                        When a WhatsApp message is received, JX AI automatically performs a Firebase Authentication lookup for the phone number. If they don't have an account, JX AI creates a secure <strong className="text-white">Firebase Authentication profile</strong> and registers them into your <strong className="text-white">global users directory</strong>. Chat sessions are stored inside Firestore and sync with their online web accounts instantly!
+                      </p>
+                    </div>
+
                   </div>
                 </div>
               </div>

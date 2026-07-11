@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // Core Primitive Helper Functions
+    // ==========================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Role-Based Access Control (RBAC): Lookup role from secure database records
+    function isAdmin() {
+      return isSignedIn() && 
+        exists(/databases/$(database)/documents/users_directory/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users_directory/$(request.auth.uid)).data.role == "Developer";
+    }
+
+    // ==========================================
+    // Entity Schema Validation Helpers
+    // ==========================================
+
+    function isValidUserDirectory(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'isAnonymous', 'role']) &&
+             data.uid is string &&
+             data.uid == request.auth.uid && // Identity spoofing guard
+             data.displayName is string &&
+             data.displayName.size() <= 100 &&
+             data.isAnonymous is bool &&
+             data.role is string &&
+             (data.role == "Member" || data.role == "Developer") &&
+             (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 32)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 128));
+    }
+
+    function isValidConversation(data) {
+      return data.keys().hasAll(['id', 'title', 'createdAt', 'messages']) &&
+             data.id is string &&
+             data.title is string &&
+             data.title.size() <= 200 &&
+             data.messages is list &&
+             data.messages.size() <= 300 && // Denial of Wallet list length boundary limits
+             (data.messages.size() == 0 || (data.messages[0] is map && data.messages[0].keys().hasAll(['id', 'role', 'content', 'timestamp'])));
+    }
+
+    // ==========================================
+    // Resource Path Rule Matches
+    // ==========================================
+
+    // users_directory Collection (PII & Role Isolation)
+    match /users_directory/{uid} {
+      // Allow authenticated reads on profiles
+      allow get: if isSignedIn();
+      // Enforce query safety and restrict lists to owners or administrators
+      allow list: if isOwner(uid) || isAdmin();
+      
+      // Standard members cannot escalate their roles on signup
+      allow create: if isOwner(uid) && isValidUserDirectory(request.resource.data) && request.resource.data.role == "Member";
+      
+      // Prevent Self-Assigned privilege escalation or role shortcutting
+      allow update: if isSignedIn() && (
+        isAdmin() || 
+        (isOwner(uid) && isValidUserDirectory(request.resource.data) && request.resource.data.role == resource.data.role)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // users Conversations Subcollection (Private logs)
+    match /users/{uid}/conversations/{conversationId} {
+      allow get, list: if isOwner(uid) || isAdmin();
+      
+      allow create: if isOwner(uid) && isValidId(conversationId) && isValidConversation(request.resource.data);
+      allow update: if (isOwner(uid) || isAdmin()) && isValidConversation(request.resource.data);
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+  }
+}
