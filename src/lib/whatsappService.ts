@@ -2,34 +2,53 @@ import { initializeApp, getApps, App } from "firebase-admin/app";
 import { getFirestore, Firestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth, Auth, UserRecord } from "firebase-admin/auth";
 import { GoogleGenAI } from "@google/genai";
-import firebaseConfig from "../../firebase-applet-config.json";
+import fs from "fs";
+import path from "path";
 
 // Initialize Firebase Admin dynamically using local configurations or ADC
 let dbAdmin: Firestore;
 let authAdmin: Auth;
 
 export function initFirebaseAdmin() {
-  if (getApps().length === 0) {
-    const projectId = firebaseConfig.projectId || process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
+  try {
+    if (getApps().length === 0) {
+      let projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
 
-    if (!projectId) {
-      console.warn("Firebase Project ID not found in firebase-applet-config.json or environment.");
+      try {
+        const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+        if (fs.existsSync(configPath)) {
+          const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+          projectId = projectId || config.projectId;
+        }
+      } catch (err) {
+        console.warn("Failed to load firebase-applet-config.json dynamically:", err);
+      }
+
+      if (!projectId) {
+        console.warn("Firebase Project ID not found. Lazy initialization aborted to prevent crash.");
+        return;
+      }
+
+      initializeApp({
+        projectId: projectId
+      });
+      console.log("Firebase Admin SDK successfully initialized for project:", projectId);
     }
-
-    initializeApp({
-      projectId: projectId
-    });
-    console.log("Firebase Admin SDK successfully initialized for project:", projectId);
+    
+    dbAdmin = getFirestore();
+    authAdmin = getAuth();
+  } catch (error: any) {
+    console.error("Failed to initialize Firebase Admin SDK:", error);
   }
-  
-  dbAdmin = getFirestore();
-  authAdmin = getAuth();
 }
 
 // Helper to lazily initialize Firebase Admin only when needed
 function ensureFirebaseAdmin() {
   if (!dbAdmin || !authAdmin) {
     initFirebaseAdmin();
+  }
+  if (!dbAdmin || !authAdmin) {
+    throw new Error("Firebase Admin SDK is not initialized. Please configure FIREBASE_PROJECT_ID or firebase-applet-config.json.");
   }
 }
 

@@ -257,11 +257,11 @@ app.post("/api/chat", async (req, res) => {
 // API endpoint for Image Generation (Unlocked for Developer, disabled for others)
 app.post("/api/generate-image", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
-  const userEmail = req.headers["x-user-email"] || req.body.email;
+  try {
+    const userEmail = req.headers["x-user-email"] || req.body?.email;
 
-  if (userEmail === "prathamjangra37@gmail.com") {
-    try {
-      const { prompt, aspectRatio } = req.body;
+    if (userEmail === "prathamjangra37@gmail.com") {
+      const { prompt, aspectRatio } = req.body || {};
       if (!prompt) {
         return res.status(400).json({ error: "Prompt is required." });
       }
@@ -309,30 +309,30 @@ app.post("/api/generate-image", async (req, res) => {
       });
 
       return res.status(200).json({ imageUrl: `/api/media/${id}` });
-    } catch (err: any) {
-      console.error("Developer Image Generation Error:", err);
-      return res.status(500).json({ 
-        error: `[Developer Bypass Error] ${err.message || "Failed to generate image via Gemini API."}` 
-      });
     }
-  }
 
-  return res.status(403).json({
-    error: "Image generation requires a supported paid Gemini API key. For the free version, please stick to text-based and image analysis requests which are fully active."
-  });
+    return res.status(403).json({
+      error: "Image generation requires a supported paid Gemini API key. For the free version, please stick to text-based and image analysis requests which are fully active."
+    });
+  } catch (err: any) {
+    console.error("Developer Image Generation Error:", err);
+    return res.status(500).json({ 
+      error: `[Developer Bypass Error] ${err.message || "Failed to generate image via Gemini API."}` 
+    });
+  }
 });
 
 // Secure endpoint for Developer Console Playground to test models and instructions
 app.post("/api/developer/chat", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
-  const userEmail = req.headers["x-user-email"] || req.body.email;
-
-  if (userEmail !== "prathamjangra37@gmail.com") {
-    return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
-  }
-
   try {
-    const { prompt, systemInstruction, model, temperature } = req.body;
+    const userEmail = req.headers["x-user-email"] || req.body?.email;
+
+    if (userEmail !== "prathamjangra37@gmail.com") {
+      return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
+    }
+
+    const { prompt, systemInstruction, model, temperature } = req.body || {};
     if (!prompt) {
       return res.status(400).json({ error: "Prompt is required." });
     }
@@ -376,59 +376,64 @@ app.get("/api/developer/ping", (req, res) => {
 // WhatsApp Chatbot Connection Status Check for Developer
 app.get("/api/developer/whatsapp/status", (req, res) => {
   res.setHeader("Content-Type", "application/json");
-  const userEmail = req.headers["x-user-email"] || req.query.email;
+  try {
+    const userEmail = req.headers["x-user-email"] || req.query?.email;
 
-  if (userEmail !== "prathamjangra37@gmail.com") {
-    return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
+    if (userEmail !== "prathamjangra37@gmail.com") {
+      return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
+    }
+
+    const tokenSet = !!process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneIdSet = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const verifyTokenSet = !!process.env.WHATSAPP_VERIFY_TOKEN;
+
+    let overallStatus = "disconnected";
+    if (tokenSet && phoneIdSet) {
+      overallStatus = "connected";
+    } else if (tokenSet || phoneIdSet) {
+      overallStatus = "partial";
+    }
+
+    return res.status(200).json({
+      status: overallStatus,
+      config: {
+        accessTokenSet: tokenSet,
+        phoneIdSet: phoneIdSet,
+        verifyTokenSet: verifyTokenSet,
+        verifyTokenValue: process.env.WHATSAPP_VERIFY_TOKEN || "jx_ai_whatsapp_token_2026"
+      },
+      timestamp: new Date()
+    });
+  } catch (err: any) {
+    console.error("WhatsApp Status Check Error:", err);
+    return res.status(500).json({ error: err.message || "Failed to check WhatsApp status." });
   }
-
-  const tokenSet = !!process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneIdSet = !!process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const verifyTokenSet = !!process.env.WHATSAPP_VERIFY_TOKEN;
-
-  let overallStatus = "disconnected";
-  if (tokenSet && phoneIdSet) {
-    overallStatus = "connected";
-  } else if (tokenSet || phoneIdSet) {
-    overallStatus = "partial";
-  }
-
-  return res.status(200).json({
-    status: overallStatus,
-    config: {
-      accessTokenSet: tokenSet,
-      phoneIdSet: phoneIdSet,
-      verifyTokenSet: verifyTokenSet,
-      verifyTokenValue: process.env.WHATSAPP_VERIFY_TOKEN || "jx_ai_whatsapp_token_2026"
-    },
-    timestamp: new Date()
-  });
 });
 
 // WhatsApp Chatbot Send Test Message for Developer
 app.post("/api/developer/whatsapp/test-message", async (req, res) => {
   res.setHeader("Content-Type", "application/json");
-  const userEmail = req.headers["x-user-email"] || req.body.email;
-
-  if (userEmail !== "prathamjangra37@gmail.com") {
-    return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
-  }
-
-  const { toPhone, message } = req.body;
-  if (!toPhone) {
-    return res.status(400).json({ error: "Recipient phone number is required." });
-  }
-
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-
-  if (!phoneId || !accessToken) {
-    return res.status(400).json({ 
-      error: "WhatsApp Cloud API is not configured on the server. Please check your system secrets." 
-    });
-  }
-
   try {
+    const userEmail = req.headers["x-user-email"] || req.body?.email;
+
+    if (userEmail !== "prathamjangra37@gmail.com") {
+      return res.status(403).json({ error: "Access Denied. Secure Developer authorization required." });
+    }
+
+    const { toPhone, message } = req.body || {};
+    if (!toPhone) {
+      return res.status(400).json({ error: "Recipient phone number is required." });
+    }
+
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+
+    if (!phoneId || !accessToken) {
+      return res.status(400).json({ 
+        error: "WhatsApp Cloud API is not configured on the server. Please check your system secrets." 
+      });
+    }
+
     const textToSend = message || "Ram Ram! This is a secure test message from your JX AI Developer Control Room. 🚀";
     console.log(`[Developer Test Message] Triggered test message to ${toPhone}`);
     const result = await sendWhatsAppTextMessage(phoneId, toPhone, textToSend, accessToken);
@@ -503,23 +508,28 @@ app.get("/api/media/:id", (req, res) => {
 // Webhook Verification (GET)
 // Meta uses this endpoint to verify that your webhook URL belongs to you and is alive.
 app.get("/api/whatsapp/webhook", (req, res) => {
-  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || "jx_ai_whatsapp_token_2026";
-  const mode = req.query["hub.mode"];
-  const token = req.query["hub.verify_token"];
-  const challenge = req.query["hub.challenge"];
+  try {
+    const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || "jx_ai_whatsapp_token_2026";
+    const mode = req.query?.["hub.mode"];
+    const token = req.query?.["hub.verify_token"];
+    const challenge = req.query?.["hub.challenge"];
 
-  console.log(`[WhatsApp Verification] Received request: mode=${mode}, token=${token}`);
+    console.log(`[WhatsApp Verification] Received request: mode=${mode}, token=${token}`);
 
-  if (mode && token) {
-    if (mode === "subscribe" && token === verifyToken) {
-      console.log("✦ [WhatsApp Webhook] Webhook successfully verified and subscribed!");
-      return res.status(200).send(challenge);
-    } else {
-      console.warn("⚠ [WhatsApp Webhook] Verification failed. Token mismatch.");
-      return res.sendStatus(403);
+    if (mode && token) {
+      if (mode === "subscribe" && token === verifyToken) {
+        console.log("✦ [WhatsApp Webhook] Webhook successfully verified and subscribed!");
+        return res.status(200).send(challenge);
+      } else {
+        console.warn("⚠ [WhatsApp Webhook] Verification failed. Token mismatch.");
+        return res.sendStatus(403);
+      }
     }
+    return res.status(400).send("Missing hub.mode or hub.verify_token");
+  } catch (err: any) {
+    console.error("WhatsApp Webhook Verification Error:", err);
+    return res.status(500).send("Internal server error during verification");
   }
-  return res.status(400).send("Missing hub.mode or hub.verify_token");
 });
 
 // Webhook Message Event Handler (POST)

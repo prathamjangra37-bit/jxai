@@ -58,6 +58,9 @@ import { Message, Conversation, Attachment } from "./types";
 import { MarkdownView } from "./components/MarkdownView";
 import { TypewriterView } from "./components/TypewriterView";
 import { motion, AnimatePresence } from "motion/react";
+
+const JX_FALLBACK_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'><rect width='100' height='100' rx='30' fill='%2309090b'/><circle cx='50' cy='50' r='35' fill='none' stroke='%233b82f6' stroke-width='4' stroke-dasharray='10, 5'/><text x='50' y='58' font-family='sans-serif' font-weight='bold' font-size='32' fill='%23ffffff' text-anchor='middle'>JX</text></svg>";
+
 import { 
   initAuth, 
   googleSignIn, 
@@ -2306,12 +2309,24 @@ export default function App() {
     return (
       <div className={`flex flex-col items-center justify-center h-screen w-full font-sans ${bgClass}`}>
         <div className="space-y-4 text-center">
-          <img 
-            src="/favicon.png" 
-            alt="JX AI Logo" 
-            referrerPolicy="no-referrer"
-            className="w-16 h-16 mx-auto rounded-3xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] object-cover" 
-          />
+          <div className="flex items-center justify-center">
+            <img 
+              src="/favicon.png" 
+              alt="" 
+              referrerPolicy="no-referrer"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                const parent = e.currentTarget.parentElement;
+                if (parent && !parent.querySelector('.logo-fallback')) {
+                  const fallback = document.createElement('div');
+                  fallback.className = 'logo-fallback w-16 h-16 mx-auto rounded-3xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] flex items-center justify-center font-extrabold text-xl text-white';
+                  fallback.innerText = 'JX';
+                  parent.appendChild(fallback);
+                }
+              }}
+              className="w-16 h-16 rounded-3xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] object-contain" 
+            />
+          </div>
           <div className="space-y-1 animate-pulse">
             <h1 className="text-sm font-bold tracking-tight text-zinc-300">Loading JX AI Workspace...</h1>
             <p className="text-[10px] text-zinc-500 font-mono">Initializing secure connection</p>
@@ -2335,12 +2350,24 @@ export default function App() {
         <div className={`w-full max-w-md p-6 md:p-8 rounded-3xl border ${cardClass} shadow-2xl space-y-6 my-6 transition-all duration-300`}>
           
           <div className="flex flex-col items-center text-center space-y-2">
-            <img 
-              src="/favicon.png" 
-              alt="JX AI Logo" 
-              referrerPolicy="no-referrer"
-              className="w-16 h-16 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] animate-pulse object-cover" 
-            />
+            <div className="flex items-center justify-center">
+              <img 
+                src="/favicon.png" 
+                alt="" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const parent = e.currentTarget.parentElement;
+                  if (parent && !parent.querySelector('.logo-fallback')) {
+                    const fallback = document.createElement('div');
+                    fallback.className = 'logo-fallback w-16 h-16 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] flex items-center justify-center font-extrabold text-xl text-white';
+                    fallback.innerText = 'JX';
+                    parent.appendChild(fallback);
+                  }
+                }}
+                className="w-16 h-16 rounded-2xl bg-zinc-950 border border-zinc-800 shadow-[0_0_30px_rgba(59,130,246,0.35)] animate-pulse object-contain" 
+              />
+            </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-extrabold tracking-tight text-white bg-gradient-to-r from-blue-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent">
                 JX AI Workspace
@@ -2720,12 +2747,24 @@ export default function App() {
         {/* Brand Header */}
         <div className={`p-5 flex items-center justify-between border-b ${subBorderClass}`}>
           <div className="flex items-center gap-3">
-            <img 
-              src="/favicon.png" 
-              alt="JX AI Logo" 
-              referrerPolicy="no-referrer"
-              className="w-9 h-9 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] object-cover" 
-            />
+            <div className="flex items-center justify-center">
+              <img 
+                src="/favicon.png" 
+                alt="" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                  const parent = e.currentTarget.parentElement;
+                  if (parent && !parent.querySelector('.logo-fallback')) {
+                    const fallback = document.createElement('div');
+                    fallback.className = 'logo-fallback w-9 h-9 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] flex items-center justify-center font-extrabold text-xs text-white';
+                    fallback.innerText = 'JX';
+                    parent.appendChild(fallback);
+                  }
+                }}
+                className="w-9 h-9 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] object-contain" 
+              />
+            </div>
             <div>
               <h2 className="text-base font-bold tracking-tight text-white">JX AI</h2>
               <span className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1">
@@ -3086,12 +3125,24 @@ export default function App() {
               {/* Mobile Sidebar Header */}
               <div className={`p-4 flex justify-between items-center border-b ${subBorderClass}`}>
                 <div className="flex items-center gap-2">
-                  <img 
-                    src="/favicon.png" 
-                    alt="JX AI Logo" 
-                    referrerPolicy="no-referrer"
-                    className="w-8 h-8 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] object-cover" 
-                  />
+                  <div className="flex items-center justify-center">
+                    <img 
+                      src="/favicon.png" 
+                      alt="" 
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const parent = e.currentTarget.parentElement;
+                        if (parent && !parent.querySelector('.logo-fallback')) {
+                          const fallback = document.createElement('div');
+                          fallback.className = 'logo-fallback w-8 h-8 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] flex items-center justify-center font-extrabold text-xs text-white';
+                          fallback.innerText = 'JX';
+                          parent.appendChild(fallback);
+                        }
+                      }}
+                      className="w-8 h-8 rounded-full bg-black border border-zinc-800 shadow-[0_0_12px_rgba(59,130,246,0.3)] object-contain" 
+                    />
+                  </div>
                   <span className="font-bold text-sm text-white">JX AI v3.5</span>
                 </div>
                 <button
@@ -3567,8 +3618,14 @@ export default function App() {
                   
                   {/* Brand Visual Intro */}
                   <div className="text-center space-y-3.5">
-                    <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-black border border-zinc-800 text-white text-3xl font-extrabold mb-1 shadow-[0_0_15px_rgba(255,255,255,0.15)]">
-                      J
+                    <div className="flex items-center justify-center mb-1">
+                      <img 
+                        src="/favicon.png" 
+                        alt="" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => { e.currentTarget.src = JX_FALLBACK_SVG; }}
+                        className="w-14 h-14 rounded-full bg-black border border-zinc-800 shadow-[0_0_15px_rgba(255,255,255,0.15)] object-contain" 
+                      />
                     </div>
                     <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight animate-fade-in">
                       Hello! I'm JX AI. How can I help you today?
