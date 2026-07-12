@@ -44,7 +44,9 @@ service cloud.firestore {
              data.role is string &&
              (data.role == "Member" || data.role == "Developer") &&
              (!('phoneNumber' in data) || (data.phoneNumber is string && data.phoneNumber.size() <= 32)) &&
-             (!('email' in data) || (data.email is string && data.email.size() <= 128));
+             (!('email' in data) || (data.email is string && data.email.size() <= 128)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1048576)) &&
+             (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000));
     }
 
     function isValidConversation(data) {
@@ -64,17 +66,22 @@ service cloud.firestore {
     // users_directory Collection (PII & Role Isolation)
     match /users_directory/{uid} {
       // Allow authenticated reads on profiles
-      allow get: if isSignedIn();
+      allow read, get: if isSignedIn();
       // Enforce query safety and restrict lists to owners or administrators
       allow list: if isOwner(uid) || isAdmin();
       
-      // Standard members cannot escalate their roles on signup
-      allow create: if isOwner(uid) && isValidUserDirectory(request.resource.data) && request.resource.data.role == "Member";
+      // Standard members cannot escalate their roles on signup, but allow the developer to sign up as Developer
+      allow create: if isOwner(uid) && isValidUserDirectory(request.resource.data) && (
+        request.resource.data.role == "Member" || 
+        (request.resource.data.role == "Developer" && request.resource.data.email == "prathamjangra37@gmail.com")
+      );
       
       // Prevent Self-Assigned privilege escalation or role shortcutting
       allow update: if isSignedIn() && (
         isAdmin() || 
-        (isOwner(uid) && isValidUserDirectory(request.resource.data) && request.resource.data.role == resource.data.role)
+        (isOwner(uid) && 
+         request.resource.data.role == resource.data.role && 
+         request.resource.data.uid == uid)
       );
       allow delete: if isAdmin();
     }

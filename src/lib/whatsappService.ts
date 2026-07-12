@@ -2,8 +2,7 @@ import { initializeApp, getApps, App } from "firebase-admin/app";
 import { getFirestore, Firestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth, Auth, UserRecord } from "firebase-admin/auth";
 import { GoogleGenAI } from "@google/genai";
-import fs from "fs";
-import path from "path";
+import firebaseConfig from "../../firebase-applet-config.json";
 
 // Initialize Firebase Admin dynamically using local configurations or ADC
 let dbAdmin: Firestore;
@@ -14,14 +13,8 @@ export function initFirebaseAdmin() {
     if (getApps().length === 0) {
       let projectId = process.env.FIREBASE_PROJECT_ID || process.env.GCLOUD_PROJECT;
 
-      try {
-        const configPath = path.join(process.cwd(), "firebase-applet-config.json");
-        if (fs.existsSync(configPath)) {
-          const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-          projectId = projectId || config.projectId;
-        }
-      } catch (err) {
-        console.warn("Failed to load firebase-applet-config.json dynamically:", err);
+      if (!projectId && firebaseConfig) {
+        projectId = firebaseConfig.projectId;
       }
 
       if (!projectId) {
@@ -35,8 +28,10 @@ export function initFirebaseAdmin() {
       console.log("Firebase Admin SDK successfully initialized for project:", projectId);
     }
     
-    dbAdmin = getFirestore();
-    authAdmin = getAuth();
+    if (getApps().length > 0) {
+      dbAdmin = getFirestore();
+      authAdmin = getAuth();
+    }
   } catch (error: any) {
     console.error("Failed to initialize Firebase Admin SDK:", error);
   }

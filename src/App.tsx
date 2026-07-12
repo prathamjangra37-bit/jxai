@@ -244,8 +244,20 @@ export default function App() {
 
   // Initialize Workspace Authentication
   useEffect(() => {
+    let fired = false;
+    
+    // Backup safety timer to prevent getting stuck on the loading screen in case of sluggish initialization
+    const safetyTimer = setTimeout(() => {
+      if (!fired) {
+        console.warn("Auth initialization safety timeout triggered. Forcing loading screen clear.");
+        setIsInitializingAuth(false);
+      }
+    }, 4000);
+
     const unsubscribe = initAuth(
       (user, token) => {
+        fired = true;
+        clearTimeout(safetyTimer);
         setWorkspaceToken(token);
         setWorkspaceUser(user);
         setCurrentUser(user);
@@ -287,6 +299,8 @@ export default function App() {
         ).catch((err) => console.error("Auto-sync directory error:", err));
       },
       () => {
+        fired = true;
+        clearTimeout(safetyTimer);
         setWorkspaceToken(null);
         setWorkspaceUser(null);
         setCurrentUser(null);
@@ -294,7 +308,10 @@ export default function App() {
         setIsInitializingAuth(false);
       }
     );
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(safetyTimer);
+      unsubscribe();
+    };
   }, []);
 
   // Auto-fetch data based on activeTab
@@ -2266,6 +2283,23 @@ export default function App() {
       }
     } finally {
       setUploadingPhoto(false);
+    }
+  };
+
+  const handlePhotoDelete = async () => {
+    if (!currentUser) {
+      handleShowNotification("Please sign in to modify your profile photo.");
+      return;
+    }
+    try {
+      setUserPhotoURL("");
+      await saveUserProfile(currentUser.uid, {
+        photoURL: ""
+      });
+      handleShowNotification("Profile photo deleted successfully.");
+    } catch (err: any) {
+      console.error("Error deleting profile photo:", err);
+      handleShowNotification(`Failed to delete photo: ${err.message || err}`);
     }
   };
 
@@ -4492,7 +4526,7 @@ export default function App() {
                   />
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                   <button
                     type="submit"
                     className="px-5 py-2.5 rounded-xl bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-bold transition-all cursor-pointer active:scale-95 shadow-md"
@@ -4500,16 +4534,28 @@ export default function App() {
                     Save profile changes
                   </button>
                   
-                  <label className="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-bold transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm">
-                    {uploadingPhoto ? "Uploading..." : "Upload Photo"}
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handlePhotoUpload} 
-                      className="hidden" 
-                      disabled={uploadingPhoto}
-                    />
-                  </label>
+                  <div className="flex items-center gap-2">
+                    {userPhotoURL && (
+                      <button
+                        type="button"
+                        onClick={handlePhotoDelete}
+                        className="px-4 py-2.5 rounded-xl bg-red-950/40 border border-red-900/30 text-red-400 hover:text-red-300 hover:bg-red-900/20 text-xs font-bold transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm"
+                      >
+                        Delete Photo
+                      </button>
+                    )}
+                    
+                    <label className="px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-300 hover:text-white hover:bg-zinc-800 text-xs font-bold transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-sm">
+                      {uploadingPhoto ? "Uploading..." : "Upload Photo"}
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={handlePhotoUpload} 
+                        className="hidden" 
+                        disabled={uploadingPhoto}
+                      />
+                    </label>
+                  </div>
                 </div>
               </form>
 
