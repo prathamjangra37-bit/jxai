@@ -36,6 +36,7 @@ let ai: GoogleGenAI | null = null;
 function getGeminiClient() {
   if (!ai) {
     const apiKey = process.env.GEMINI_API_KEY;
+    console.log(`[getGeminiClient] Checking GEMINI_API_KEY... Present: ${!!apiKey}`);
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY is missing in the environment. Please configure it in your Settings > Secrets.");
     }
@@ -57,7 +58,8 @@ async function callGeminiWithRetryAndFallback(
   contents: any,
   systemInstruction: string
 ) {
-  const models = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"];
+  // Put gemini-3.5-flash first to guarantee extremely fast responses and avoid serverless timeouts (e.g. Vercel 10s limit)
+  const models = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
   let lastError: any = null;
 
   for (const modelName of models) {

@@ -1966,6 +1966,14 @@ export default function App() {
               console.error("Non-JSON Server Error:", rawText);
               if (rawText && rawText.length < 200) {
                 errorMessage = rawText;
+              } else if (rawText && rawText.includes("FUNCTION_INVOCATION_FAILED")) {
+                errorMessage = "Serverless Function Invocation Failed (FUNCTION_INVOCATION_FAILED). The backend server failed to initialize or timed out in production.";
+              } else if (rawText && rawText.includes("504 Gateway Timeout")) {
+                errorMessage = "Gateway Timeout (504). The server took too long to respond. Please try again.";
+              } else if (rawText && rawText.includes("502 Bad Gateway")) {
+                errorMessage = "Bad Gateway (502). The backend server crashed or is unavailable.";
+              } else {
+                errorMessage = `Server Error (HTTP ${res.status}). The backend may be booting up or facing a temporary service issue.`;
               }
             } catch (textErr) {
               console.error("Failed to read raw error text:", textErr);
@@ -2212,6 +2220,14 @@ export default function App() {
               console.error("Non-JSON Server Error:", rawText);
               if (rawText && rawText.length < 200) {
                 errorMessage = rawText;
+              } else if (rawText && rawText.includes("FUNCTION_INVOCATION_FAILED")) {
+                errorMessage = "Serverless Function Invocation Failed (FUNCTION_INVOCATION_FAILED). The backend server failed to initialize or timed out in production.";
+              } else if (rawText && rawText.includes("504 Gateway Timeout")) {
+                errorMessage = "Gateway Timeout (504). The server took too long to respond. Please try again.";
+              } else if (rawText && rawText.includes("502 Bad Gateway")) {
+                errorMessage = "Bad Gateway (502). The backend server crashed or is unavailable.";
+              } else {
+                errorMessage = `Server Error (HTTP ${res.status}). The backend may be booting up or facing a temporary service issue.`;
               }
             } catch (textErr) {
               console.error("Failed to read raw error text:", textErr);
