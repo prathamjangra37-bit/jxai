@@ -112,7 +112,7 @@ async function callGeminiWithRetryAndFallback(
 
 app.post("/api/chat", async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages } = req.body || {};
     if (!messages || !Array.isArray(messages)) {
       res.setHeader("Content-Type", "application/json");
       return res.status(400).json({ error: "Messages array is required." });
@@ -452,7 +452,7 @@ const mediaCache = new Map<string, { data: string; name: string; mimeType: strin
 // API endpoint to register media base64 data and get a real HTTP link
 app.post("/api/register-media", (req, res) => {
   try {
-    const { data, name, mimeType } = req.body;
+    const { data, name, mimeType } = req.body || {};
     if (!data) {
       res.setHeader("Content-Type", "application/json");
       return res.status(400).json({ error: "Data is required." });

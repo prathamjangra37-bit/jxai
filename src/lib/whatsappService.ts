@@ -2,7 +2,21 @@ import { initializeApp, getApps, App } from "firebase-admin/app";
 import { getFirestore, Firestore, FieldValue } from "firebase-admin/firestore";
 import { getAuth, Auth, UserRecord } from "firebase-admin/auth";
 import { GoogleGenAI } from "@google/genai";
-import firebaseConfig from "../../firebase-applet-config.json";
+import fs from "fs";
+import path from "path";
+
+// Dynamically load firebase-applet-config.json safely
+let firebaseConfig: any = null;
+try {
+  const configPath = path.resolve(process.cwd(), "firebase-applet-config.json");
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+  } else {
+    console.warn("firebase-applet-config.json not found at:", configPath);
+  }
+} catch (err) {
+  console.warn("Failed to load firebase-applet-config.json dynamically:", err);
+}
 
 // Initialize Firebase Admin dynamically using local configurations or ADC
 let dbAdmin: Firestore;
