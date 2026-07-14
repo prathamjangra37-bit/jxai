@@ -102,7 +102,7 @@ const JXLogo = ({
   borderClass?: string;
   bgClass?: string;
 }) => {
-  const [logoSrc, setLogoSrc] = useState("/assets/logo.png");
+  const [logoSrc, setLogoSrc] = useState<string>(logoLocal);
   const [hasError, setHasError] = useState(false);
 
   if (hasError) {
@@ -121,9 +121,14 @@ const JXLogo = ({
       alt="JX AI" 
       referrerPolicy="no-referrer"
       onError={() => {
-        if (logoSrc !== logoLocal) {
-          setLogoSrc(logoLocal);
+        if (logoSrc === logoLocal) {
+          // Fall back to /assets/logo.png
+          setLogoSrc("/assets/logo.png");
+        } else if (logoSrc === "/assets/logo.png") {
+          // Fall back to /logo.jpg
+          setLogoSrc("/logo.jpg");
         } else {
+          // Everything failed, show CSS text fallback
           setHasError(true);
         }
       }}
