@@ -58,8 +58,8 @@ async function callGeminiWithRetryAndFallback(
   contents: any,
   systemInstruction: string
 ) {
-  // Put gemini-3.5-flash first to guarantee extremely fast responses and avoid serverless timeouts (e.g. Vercel 10s limit)
-  const models = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  // Put gemini-3.1-flash-lite first to avoid free-tier quota limits (429) on gemini-3.5-flash, with others as robust fallbacks
+  const models = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"];
   let lastError: any = null;
 
   for (const modelName of models) {
