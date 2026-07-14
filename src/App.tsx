@@ -561,10 +561,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (activeTab === "developer" && isDeveloper && devSubTab === "whatsapp") {
+    if (activeTab === "developer" && isDeveloper) {
       fetchWhatsappStatus();
     }
-  }, [activeTab, isDeveloper, devSubTab]);
+  }, [activeTab, isDeveloper]);
 
   const handleSendTestMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -5006,7 +5006,16 @@ export default function App() {
                   {tab === "users" && "👥 User Management"}
                   {tab === "playground" && "🧪 LLM Playground"}
                   {tab === "settings" && "⚙️ System Configuration"}
-                  {tab === "whatsapp" && "💬 WhatsApp Chatbot"}
+                  {tab === "whatsapp" && (
+                    <span className="flex items-center gap-1.5">
+                      💬 WhatsApp Chatbot
+                      {whatsappStatus?.status !== "connected" && (
+                        <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400">
+                          OPTIONAL
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -5548,27 +5557,38 @@ export default function App() {
                       Send a dynamic live WhatsApp message to verify that your credentials, webhooks, and the official Meta API are properly configured and authorized.
                     </p>
 
+                    {whatsappStatus?.status !== "connected" && (
+                      <div className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/15 text-amber-300 text-[11px] leading-relaxed">
+                        <strong className="block text-amber-400 mb-0.5">WhatsApp Integration is Inactive (Optional)</strong>
+                        <span className="text-zinc-400">
+                          This feature is disabled because the optional WhatsApp environment secrets are not configured on the server. To enable, configure <code className="text-zinc-300 font-mono">WHATSAPP_ACCESS_TOKEN</code> and <code className="text-zinc-300 font-mono">WHATSAPP_PHONE_NUMBER_ID</code> on your hosting platform.
+                        </span>
+                      </div>
+                    )}
+
                     <div className="space-y-3 pt-1">
                       <div>
                         <label className="text-[10px] font-bold text-zinc-500 block uppercase tracking-wider mb-1.5">RECIPIENT PHONE NUMBER</label>
                         <input
                           type="text"
-                          required
+                          required={whatsappStatus?.status === "connected"}
+                          disabled={whatsappStatus?.status !== "connected"}
                           value={testRecipientPhone}
                           onChange={(e) => setTestRecipientPhone(e.target.value)}
-                          placeholder="e.g. 919876543210 (include country code)"
-                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                          placeholder={whatsappStatus?.status === "connected" ? "e.g. 919876543210 (include country code)" : "WhatsApp integration not configured"}
+                          className="w-full bg-zinc-950 border border-zinc-800 disabled:opacity-40 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
                         />
                       </div>
 
                       <div>
                         <label className="text-[10px] font-bold text-zinc-500 block uppercase tracking-wider mb-1.5">TEST MESSAGE BODY (OPTIONAL)</label>
                         <textarea
+                          disabled={whatsappStatus?.status !== "connected"}
                           value={testMessageContent}
                           onChange={(e) => setTestMessageContent(e.target.value)}
                           placeholder="If left empty, JX AI sends a cool default welcoming system message."
                           rows={2}
-                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 resize-none"
+                          className="w-full bg-zinc-950 border border-zinc-800 disabled:opacity-40 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 resize-none"
                         />
                       </div>
 
@@ -5581,8 +5601,8 @@ export default function App() {
 
                       <button
                         type="submit"
-                        disabled={sendingTestMessage || loadingWhatsappStatus}
-                        className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/35 text-zinc-950 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
+                        disabled={sendingTestMessage || loadingWhatsappStatus || whatsappStatus?.status !== "connected"}
+                        className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/35 disabled:text-zinc-500 text-zinc-950 font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/10"
                       >
                         {sendingTestMessage ? (
                           <>
