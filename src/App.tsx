@@ -104,15 +104,17 @@ const JXLogo = ({
 
   if (hasError) {
     return (
-      <div className={`flex items-center justify-center shrink-0 ${className} ${roundedClass} ${bgClass} ${borderClass} ${glowClass} text-blue-400`}>
-        <Sparkles className="w-1/2 h-1/2 text-blue-400 animate-pulse" />
+      <div className={`flex flex-col items-center justify-center shrink-0 ${className} ${roundedClass} ${bgClass} ${borderClass} ${glowClass} select-none relative overflow-hidden`}>
+        <div className="absolute inset-0 bg-radial from-blue-500/10 to-transparent pointer-events-none" />
+        <span className="text-white font-black tracking-tighter text-[40%] leading-none relative z-10">JX</span>
+        <span className="text-[12%] text-blue-400 font-bold uppercase tracking-widest leading-none mt-[4%] relative z-10">AI</span>
       </div>
     );
   }
 
   return (
     <img 
-      src="/favicon.png" 
+      src="/assets/logo.png" 
       alt="JX AI" 
       referrerPolicy="no-referrer"
       onError={() => setHasError(true)}
