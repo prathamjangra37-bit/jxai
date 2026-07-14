@@ -58,6 +58,8 @@ import { Message, Conversation, Attachment } from "./types";
 import { MarkdownView } from "./components/MarkdownView";
 import { TypewriterView } from "./components/TypewriterView";
 import { motion, AnimatePresence } from "motion/react";
+// @ts-ignore
+import logoLocal from "./assets/images/logo_local.jpg";
 
 const JX_FALLBACK_SVG = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' width='100' height='100'><rect width='100' height='100' rx='30' fill='%2309090b'/><circle cx='50' cy='50' r='35' fill='none' stroke='%233b82f6' stroke-width='4' stroke-dasharray='10, 5'/><text x='50' y='58' font-family='sans-serif' font-weight='bold' font-size='32' fill='%23ffffff' text-anchor='middle'>JX</text></svg>";
 
@@ -100,6 +102,7 @@ const JXLogo = ({
   borderClass?: string;
   bgClass?: string;
 }) => {
+  const [logoSrc, setLogoSrc] = useState("/assets/logo.png");
   const [hasError, setHasError] = useState(false);
 
   if (hasError) {
@@ -114,10 +117,16 @@ const JXLogo = ({
 
   return (
     <img 
-      src="/assets/logo.png" 
+      src={logoSrc} 
       alt="JX AI" 
       referrerPolicy="no-referrer"
-      onError={() => setHasError(true)}
+      onError={() => {
+        if (logoSrc !== logoLocal) {
+          setLogoSrc(logoLocal);
+        } else {
+          setHasError(true);
+        }
+      }}
       className={`object-contain shrink-0 ${className} ${roundedClass} ${bgClass} ${borderClass} ${glowClass}`} 
     />
   );
