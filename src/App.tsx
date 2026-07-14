@@ -1863,7 +1863,7 @@ export default function App() {
         const modelMsg: Message = {
           id: Math.random().toString(36).substring(7),
           role: "model",
-          content: `मैंने आपके लिए प्रॉम्ट **"${trimmed}"** पर एक सुंदर एआई इमेज बनाई है! (Here is the generated image for your prompt!)`,
+          content: `Bhai, tere prompt **"${trimmed}"** par mast AI image bana di h! Dekh k bta kaisi h 😉👇`,
           timestamp: new Date(),
           attachments: [
             {
@@ -2162,7 +2162,7 @@ export default function App() {
         const modelMsg: Message = {
           id: Math.random().toString(36).substring(7),
           role: "model",
-          content: `मैंने आपके लिए प्रॉम्ट **"${originalPrompt}"** पर फिर से एक नई इमेज बनाई है! (Here is the newly generated image for your prompt!)`,
+          content: `Bhai, tere prompt **"${originalPrompt}"** par fir se ek nai badhiya image bana di h! Dekh k bta kaisi h 😉👇`,
           timestamp: new Date(),
           attachments: [
             {
@@ -3805,17 +3805,17 @@ export default function App() {
                       <JXLogo className="w-14 h-14" roundedClass="rounded-2xl" glowClass="shadow-[0_0_25px_rgba(59,130,246,0.25)]" bgClass="bg-zinc-950" />
                     </div>
                     <h2 className="text-2xl md:text-3xl font-black text-white tracking-tight animate-fade-in">
-                      Hello! I'm JX AI. How can I help you today?
+                      Bhai, JX AI active h! Bata kya help chahiye? 🤗
                     </h2>
                     <p className="text-xs md:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
-                      I am highly optimized to support coding roadmaps, technical guidance, organic agriculture steps, and traditional Indian advice. Let's begin!
+                      Ekdum dosto jaisi chat, short aur natural replies bina kisi faltu baaton ke! Sahi aur sasti salah, koi gyaan nahi. 💬🚀
                     </p>
                   </div>
 
                   {/* Suggestions Pills Grid */}
                   <div className="space-y-4">
                     <h3 className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest text-center">
-                      Choose a suggested prompt to start
+                      Inme se kuch bhi try kar le bhai 👇
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {SUGGESTIONS.map((sug) => (
@@ -3843,7 +3843,7 @@ export default function App() {
                   {/* Micro Help Footer Info */}
                   <div className="flex items-center justify-center gap-1.5 text-[10px] text-zinc-500 italic">
                     <Compass className="w-3.5 h-3.5 text-zinc-600" />
-                    <span>Preferences set to {language} dialect mode</span>
+                    <span>Dosto waali WhatsApp style chat active h! 🔥</span>
                   </div>
 
                 </div>
@@ -4879,11 +4879,11 @@ export default function App() {
                   How to chat with JX AI
                 </h3>
                 <p className="text-xs text-zinc-500 leading-relaxed font-sans">
-                  JX AI is highly adaptive. When starting a conversation, JX AI will greet you in English. From there, you can continue talking in English, Hindi (हिंदी), or Hinglish!
+                  JX AI is highly adaptive. It will talk to you like a close friend on WhatsApp using pure Hinglish (Roman Hindi).
                 </p>
                 <div className="p-4 rounded-xl bg-zinc-950/40 border border-zinc-850/60 space-y-2.5 text-xs text-zinc-300">
-                  <p>• <strong className="text-white">Hindi/Hinglish:</strong> If you speak in Hindi or Hinglish, JX AI will adopt a warm, respectful and friendly conversational tone (e.g. "राम राम लाडले, के ज्ञान हैं!").</p>
-                  <p>• <strong className="text-white">Clarification:</strong> If your request or task is unclear, JX AI will politely ask for clarification instead of guessing.</p>
+                  <p>• <strong className="text-white">WhatsApp Chat Style:</strong> JX AI communicates in a casual, warm, and friendly Hinglish chat tone (e.g. "Kya haal h bhai? Bata kya help chahiye 🤗").</p>
+                  <p>• <strong className="text-white">Clarification:</strong> If your request or task is unclear, JX AI will politely ask for clarification in Hinglish instead of guessing.</p>
                   <p>• <strong className="text-white">Honesty:</strong> If JX AI doesn't know an answer, it will clearly state so instead of making up facts.</p>
                 </div>
               </div>

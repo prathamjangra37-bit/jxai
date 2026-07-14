@@ -3,41 +3,41 @@ import { Suggestion, DeveloperNote } from "./types";
 export const SUGGESTIONS: Suggestion[] = [
   {
     id: "joke",
-    title: "Haryanvi Humour",
-    text: "Tell me a classic, funny Haryanvi joke or story in Haryanvi style that will make me laugh!",
+    title: "Mast Joke Suna",
+    text: "Bhai koi mast sa funny joke suna de maza aa jaye! 😂🔥",
     icon: "Laugh"
   },
   {
     id: "business",
-    title: "Start a Business",
-    text: "I want to start a new small business. Please guide me with a step-by-step business plan.",
+    title: "Business Start Karna Hai",
+    text: "Bhai ek naya small business start karna h, step-by-step sahi tareeka bata na! 💼🚀",
     icon: "Briefcase"
   },
   {
     id: "farming",
-    title: "Organic Farming Tips",
-    text: "Give me some traditional organic farming and soil health improvement advice in simple steps.",
+    title: "Organic Kheti Ke Tips",
+    text: "Kheti me organic khad aur mitti badhiya karne ka koi desi tareeka batao! 🌱🌾",
     icon: "Sprout"
   },
   {
     id: "culture",
-    title: "Haryanvi Cuisine",
-    text: "What are some of the most famous traditional foods of Haryana and what are their health benefits?",
+    title: "Haryanvi Khaana",
+    text: "Bhai Haryana ke famous desi khaane aur unke badhiya health benefits bata! 🥣💪",
     icon: "Utensils"
   }
 ];
 
 export const PRINCIPLES: DeveloperNote[] = [
   {
-    title: "Deis Tone & Dialect",
-    description: "JX AI communicates with a sweet blend of Haryanvi and Hindi, reflecting respect, local warmth, and a friendly 'Ram Ram' culture."
+    title: "WhatsApp Chat Style",
+    description: "Bhai ekdum dosto jaisi chat, short aur natural replies bina kisi faltu baaton ke! 🤗"
   },
   {
-    title: "Step-by-Step Guidance",
-    description: "If you want to learn something, JX AI guides you slowly and thoroughly with simple words and practical examples."
+    title: "Desi & Friendly",
+    description: "Koi artificial intelligence waala roboti dimaag nahi, ekdum apna bhai jaisa asar! ❤️"
   },
   {
-    title: "Absolute Honesty",
-    description: "If JX AI does not know the answer to a question, it will be honest and say so instead of giving incorrect or made-up information."
+    title: "Ekdum Sahi Baat",
+    description: "Jo pata h bas wahi bataenge, faltu ka gyaan ya fekne waala kaam bilkul nahi! 💯"
   }
 ];
