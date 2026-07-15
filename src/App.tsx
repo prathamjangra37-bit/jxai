@@ -764,6 +764,10 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Google login failed:", err);
+      const errCode = err.code || "unknown";
+      const errMsg = err.message || String(err);
+      const fullError = `[${errCode}]: ${errMsg}`;
+      
       if (
         err.code === "auth/popup-closed-by-user" || 
         err.code === "auth/cancelled-popup-request" || 
@@ -771,11 +775,11 @@ export default function App() {
         err.message?.includes("closed-by-user") || 
         err.message?.includes("popup")
       ) {
-        setWorkspaceAuthError("IFRAME_POPUP_CLOSED");
+        setWorkspaceAuthError(`IFRAME_POPUP_CLOSED|${fullError}`);
       } else {
-        setWorkspaceAuthError(err.message || String(err));
+        setWorkspaceAuthError(fullError);
       }
-      handleShowNotification(`Connection failed: ${err.message || err}`);
+      handleShowNotification(`Connection failed: ${errMsg}`);
     } finally {
       setWorkspaceAuthLoading(false);
     }
@@ -928,6 +932,10 @@ export default function App() {
       }
     } catch (err: any) {
       console.error("Failed to link guest to Google:", err);
+      const errCode = err.code || "unknown";
+      const errMsg = err.message || String(err);
+      const fullError = `[${errCode}]: ${errMsg}`;
+
       if (err.code === "auth/credential-already-in-use") {
         const confirmMerge = window.confirm(
           "This Google account is already registered as a JX AI user. Would you like to sign in to that Google account and merge your guest chat history into it?"
@@ -951,29 +959,35 @@ export default function App() {
             }
           } catch (mergeErr: any) {
             console.error("Merge error:", mergeErr);
+            const mErrCode = mergeErr.code || "unknown";
+            const mErrMsg = mergeErr.message || String(mergeErr);
+            const mFullError = `[${mErrCode}]: ${mErrMsg}`;
             if (
               mergeErr.code === "auth/cancelled-popup-request" || 
               mergeErr.code === "auth/popup-closed-by-user" || 
               mergeErr.message?.includes("popup")
             ) {
-              setLinkingError("IFRAME_POPUP_CLOSED");
+              setLinkingError(`IFRAME_POPUP_CLOSED|${mFullError}`);
               handleShowNotification("Iframe restrictions blocked the login. Click 'Open in new tab' to sign in successfully.");
             } else {
-              handleShowNotification(`Merge failed: ${mergeErr.message || mergeErr}`);
+              setLinkingError(mFullError);
+              handleShowNotification(`Merge failed: ${mErrMsg}`);
             }
           }
         }
       } else if (err.code === "auth/unauthorized-domain" || err.message?.includes("unauthorized-domain")) {
+        setLinkingError(fullError);
         handleShowNotification("Domain not authorized in Firebase Console -> Auth -> Settings -> Authorized Domains.");
       } else if (
         err.code === "auth/cancelled-popup-request" || 
         err.code === "auth/popup-closed-by-user" || 
         err.message?.includes("popup")
       ) {
-        setLinkingError("IFRAME_POPUP_CLOSED");
+        setLinkingError(`IFRAME_POPUP_CLOSED|${fullError}`);
         handleShowNotification("Iframe restrictions blocked the popup. Click 'Open in new tab' to link successfully.");
       } else {
-        handleShowNotification(`Failed to link account: ${err.message || err}`);
+        setLinkingError(fullError);
+        handleShowNotification(`Failed to link account: ${errMsg}`);
       }
     } finally {
       setIsLinkingLoading(false);
@@ -2917,7 +2931,7 @@ export default function App() {
           <div className="space-y-3">
             {workspaceAuthError && (
               <div className="p-4 rounded-2xl border border-red-500/20 bg-red-500/5 text-left space-y-3 text-xs leading-relaxed">
-                {workspaceAuthError === "IFRAME_POPUP_CLOSED" ? (
+                {workspaceAuthError.startsWith("IFRAME_POPUP_CLOSED") ? (
                   <>
                     <p className="font-bold text-red-400 flex items-center gap-1.5">
                       <span className="text-sm">⚠️</span> Iframe Popup Blocked
@@ -2933,11 +2947,18 @@ export default function App() {
                         <li>Once the app runs in its standalone tab, click <strong>'Sign In with Google'</strong> again. It will work flawlessly!</li>
                       </ol>
                     </div>
+                    {workspaceAuthError.includes("|") && (
+                      <div className="pt-2 border-t border-red-500/10">
+                        <p className="text-[10px] text-red-400/80 font-mono select-text">
+                          Original Firebase Error: {workspaceAuthError.split("|")[1]}
+                        </p>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
                     <p className="font-bold text-red-400">Connection Failed</p>
-                    <p className="text-zinc-300 text-[11px] font-mono">
+                    <p className="text-zinc-300 text-[11px] font-mono select-text">
                       {workspaceAuthError}
                     </p>
                   </>
@@ -3295,7 +3316,7 @@ export default function App() {
                 
                 {linkingError && (
                   <div className="p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-left text-red-400 space-y-2">
-                    {linkingError === "IFRAME_POPUP_CLOSED" ? (
+                    {linkingError.startsWith("IFRAME_POPUP_CLOSED") ? (
                       <>
                         <p className="font-bold text-[11px] flex items-center gap-1.5">
                           <span>⚠️</span> Popup Blocked / Cancelled
@@ -3310,9 +3331,16 @@ export default function App() {
                             <li>Run in standalone tab, then click <strong>'Upgrade / Link Google'</strong> again!</li>
                           </ol>
                         </div>
+                        {linkingError.includes("|") && (
+                          <div className="pt-2 border-t border-red-500/10">
+                            <p className="text-[9px] text-red-400/80 font-mono select-text">
+                              Original Firebase Error: {linkingError.split("|")[1]}
+                            </p>
+                          </div>
+                        )}
                       </>
                     ) : (
-                      <p className="font-mono text-[10px]">{linkingError}</p>
+                      <p className="font-mono text-[10px] select-text">{linkingError}</p>
                     )}
                   </div>
                 )}
@@ -3624,7 +3652,7 @@ export default function App() {
 
                       {linkingError && (
                         <div className="p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-left text-red-400 space-y-2">
-                          {linkingError === "IFRAME_POPUP_CLOSED" ? (
+                          {linkingError.startsWith("IFRAME_POPUP_CLOSED") ? (
                             <>
                               <p className="font-bold text-[11px] flex items-center gap-1.5">
                                 <span>⚠️</span> Popup Blocked / Cancelled
@@ -3639,9 +3667,16 @@ export default function App() {
                                   <li>Run in standalone tab, then click <strong>'Upgrade / Link Google'</strong> again!</li>
                                 </ol>
                               </div>
+                              {linkingError.includes("|") && (
+                                <div className="pt-2 border-t border-red-500/10">
+                                  <p className="text-[9px] text-red-400/80 font-mono select-text">
+                                    Original Firebase Error: {linkingError.split("|")[1]}
+                                  </p>
+                                </div>
+                              )}
                             </>
                           ) : (
-                            <p className="font-mono text-[10px]">{linkingError}</p>
+                            <p className="font-mono text-[10px] select-text">{linkingError}</p>
                           )}
                         </div>
                       )}
